@@ -1,0 +1,63 @@
+@page "/"
+@using ChristmasGiftCollection.Core.Models
+@using ChristmasGiftCollection.Core.Services
+@rendermode InteractiveServer
+@inject IMemberService MemberService;
+<PageTitle>Family Gift Collection</PageTitle>
+
+<MudText Typo="Typo.h3" Align="Align.Center" GutterBottom="true">
+    Welcome to Family Gift Collection 2025
+</MudText>
+
+<MudText Typo="Typo.body1" Align="Align.Center" Class="mb-4">
+    Visualize your family and manage Christmas gift exchanges
+</MudText>
+
+<!-- Family Graph Component -->
+<MudPaper Class="pa-4 mt-4" Elevation="2" Style="height: 600px;">
+    <MudText Typo="Typo.h6" GutterBottom="true">Family Network</MudText>
+    <MudText Typo="Typo.body2" Class="mb-3">
+        Interactive family graph - Click nodes to view details, drag to rearrange
+    </MudText>
+    <FamilyGraph />
+</MudPaper>
+
+<MudPaper Class="pa-4 mt-4" Elevation="2">
+    <MudText Typo="Typo.h6" GutterBottom="true">Quick Guide</MudText>
+    <MudText GutterBottom="true">
+        Use this app to manage your family Christmas gift collection:
+    </MudText>
+    <ul>
+        <li><MudIcon Icon="@Icons.Material.Filled.People" Color="Color.Primary" Size="Size.Small" /> Add family members to the interactive graph</li>
+        <li><MudIcon Icon="@Icons.Material.Filled.FamilyRestroom" Color="Color.Primary" Size="Size.Small" /> Define relationships between family members</li>
+        <li><MudIcon Icon="@Icons.Material.Filled.CardGiftcard" Color="Color.Primary" Size="Size.Small" /> Add gift ideas for each person</li>
+        <li><MudIcon Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Primary" Size="Size.Small" /> Mark gifts as taken to avoid duplicates</li>
+    </ul>
+</MudPaper>
+
+<!-- Floating Action Button (FAB) for Add Member -->
+<div class="fab-container">
+    <MudFab Color="Color.Primary"
+            StartIcon="@Icons.Material.Filled.PersonAdd"
+            Label="Add Member"
+            Class="fab-button"
+            OnClick="@HandleAddMember" />
+</div>
+
+@code {
+    private async Task HandleAddMember()
+    {
+        // Use event sourcing to create a new member
+        var name = "Max - " + Guid.NewGuid().ToString().Substring(0, 5);
+
+        await MemberService.CreateMemberAsync(
+            name: name,
+            type: MemberType.Parent,
+            email: null,
+            dateOfBirth: null,
+            notes: "Created from UI");
+
+        // TODO: This will open the AddMemberDialog in Phase 5
+        // For now, just show a snackbar placeholder
+    }
+}
