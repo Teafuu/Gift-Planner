@@ -1,17 +1,23 @@
+// AppHost (Program.cs)
 var builder = DistributedApplication.CreateBuilder(args);
 
-// Add PostgreSQL server with PgAdmin
-var postgres = builder.AddPostgres("postgres")
-    .WithDataVolume()
-    .WithPgAdmin();
+// EventStoreDB container
+var eventstore = builder.AddContainer("eventstore", "eventstore/eventstore")
+    .WithHttpEndpoint(port: 2113, targetPort: 2113, name: "http")  // exposes 2113 on localhost:2113
+    .WithEndpoint(port: 1113, targetPort: 1113, name: "tcp", scheme: "tcp")
+    .WithEnvironment("EVENTSTORE_CLUSTER_SIZE", "1")
+    .WithEnvironment("EVENTSTORE_RUN_PROJECTIONS", "All")
+    .WithEnvironment("EVENTSTORE_START_STANDARD_PROJECTIONS", "true")
+    .WithEnvironment("EVENTSTORE_ENABLE_ATOM_PUB_OVER_HTTP", "true")
+    .WithEnvironment("EVENTSTORE_INSECURE", "true")
+    .WithBindMount("eventstore-data-gift", "/var/lib/eventstore")
+    .WithBindMount("eventstore-logs", "/var/log/eventstore");
 
-// Add database for gift collection
-var giftcollectiondb = postgres.AddDatabase("giftcollection");
-
-// Add Blazor Web application with database reference
+// Blazor Web app (runs on host)
 builder.AddProject<Projects.ChristmasGiftCollection_Web>("webfrontend")
     .WithExternalHttpEndpoints()
-    .WithReference(giftcollectiondb)
-    .WaitFor(giftcollectiondb);
+    .WaitFor(eventstore)
+    // Use localhost because the project is not in the container network
+    .WithEnvironment("ConnectionStrings__eventstore", "esdb://localhost:2113?tls=false");
 
 builder.Build().Run();

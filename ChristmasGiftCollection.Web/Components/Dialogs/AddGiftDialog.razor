@@ -1,0 +1,68 @@
+@using ChristmasGiftCollection.Core.Models
+@using ChristmasGiftCollection.Core.Services
+@using MudBlazor
+@inject IMemberService MemberService
+@inject ISnackbar Snackbar
+@rendermode InteractiveServer
+
+<MudDialog>
+    <DialogContent>
+        <MudTextField @bind-Value="_name"
+                      Label="Gift Name"
+                      Required="true"
+                      Variant="Variant.Outlined"
+                      Margin="Margin.Dense" />
+
+        <MudTextField @bind-Value="_description"
+                      Label="Description (Optional)"
+                      Lines="3"
+                      Variant="Variant.Outlined"
+                      Margin="Margin.Dense"
+                      Class="mt-3" />
+
+        <MudSelect @bind-Value="_priority"
+                   Label="Priority"
+                   Variant="Variant.Outlined"
+                   Margin="Margin.Dense"
+                   Class="mt-3">
+            <MudSelectItem Value="@GiftPriority.Low">Low</MudSelectItem>
+            <MudSelectItem Value="@GiftPriority.Medium">Medium</MudSelectItem>
+            <MudSelectItem Value="@GiftPriority.High">High</MudSelectItem>
+        </MudSelect>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Color="Color.Primary"
+                   Variant="Variant.Filled"
+                   OnClick="Submit"
+                   Disabled="@(string.IsNullOrWhiteSpace(_name))">
+            Add Gift
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+    [Parameter] public Guid MemberId { get; set; }
+
+    private string _name = string.Empty;
+    private string? _description;
+    private GiftPriority _priority = GiftPriority.Medium;
+
+    private async Task Submit()
+    {
+        try
+        {
+            await MemberService.AddGiftAsync(MemberId, _name, _description, _priority);
+
+            Snackbar.Add($"Gift '{_name}' added successfully!", Severity.Success);
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error adding gift: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}

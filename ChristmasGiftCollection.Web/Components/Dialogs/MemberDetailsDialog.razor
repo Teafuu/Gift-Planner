@@ -1,0 +1,176 @@
+@using ChristmasGiftCollection.Core.Models
+@using ChristmasGiftCollection.Core.Services
+@using MudBlazor
+@inject IMemberService MemberService
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@rendermode InteractiveServer
+
+<MudDialog>
+    <DialogContent>
+        @if (_member == null)
+        {
+            <MudProgressCircular Indeterminate="true" />
+        }
+        else
+        {
+            <MudText Typo="Typo.h6" Class="mb-2">@_member.Name</MudText>
+
+            <MudDivider Class="my-4" />
+
+            <MudText Typo="Typo.h6" Class="mb-3">
+                Gifts (@_member.Gifts.Count)
+                <MudIconButton Icon="@Icons.Material.Filled.Add"
+                               Size="Size.Small"
+                               Color="Color.Primary"
+                               OnClick="OpenAddGiftDialog" />
+            </MudText>
+
+            @if (!_member.Gifts.Any())
+            {
+                <MudText Color="Color.Secondary">No gifts added yet.</MudText>
+            }
+            else
+            {
+                @foreach (var gift in _member.Gifts.OrderBy(g => g.Status))
+                {
+                    <MudCard Class="mb-2" Elevation="2">
+                        <MudCardContent>
+                            <div class="d-flex justify-space-between align-center">
+                                <div style="flex: 1;">
+                                    <MudText Typo="Typo.body1">
+                                        <strong>@gift.Name</strong>
+                                        @if (gift.Status == GiftStatus.Taken)
+                                        {
+                                            <MudChip T="string" Size="Size.Small" Color="Color.Success" Class="ml-2">Taken</MudChip>
+                                        }
+                                    </MudText>
+                                    @if (!string.IsNullOrEmpty(gift.Description))
+                                    {
+                                        <MudText Typo="Typo.body2" Color="Color.Secondary">@gift.Description</MudText>
+                                    }
+                                    <MudText Typo="Typo.caption">
+                                        Priority: @gift.Priority
+                                    </MudText>
+                                    @if (gift.TakenByMemberId.HasValue)
+                                    {
+                                        <MudText Typo="Typo.caption" Color="Color.Success">
+                                            Taken on @gift.TakenAt?.ToString("MMM dd, yyyy")
+                                        </MudText>
+                                    }
+                                </div>
+                                <div>
+                                    @if (gift.Status == GiftStatus.Available)
+                                    {
+                                        <MudButton Size="Size.Small"
+                                                   Variant="Variant.Filled"
+                                                   Color="Color.Success"
+                                                   OnClick="@(() => TakeGift(gift.Id))">
+                                            Take
+                                        </MudButton>
+                                    }
+                                    else
+                                    {
+                                        <MudButton Size="Size.Small"
+                                                   Variant="Variant.Outlined"
+                                                   Color="Color.Default"
+                                                   OnClick="@(() => ReleaseGift(gift.Id))">
+                                            Release
+                                        </MudButton>
+                                    }
+                                </div>
+                            </div>
+                        </MudCardContent>
+                    </MudCard>
+                }
+            }
+
+            @if (_member.Relationships.Any())
+            {
+                <MudDivider Class="my-4" />
+                <MudText Typo="Typo.h6" Class="mb-2">Relationships</MudText>
+                @foreach (var rel in _member.Relationships)
+                {
+                    <MudChip T="string" Size="Size.Small" Class="mr-1 mb-1">
+                        @rel.Type.ToString().Replace("Of", " of")
+                    </MudChip>
+                }
+            }
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Close">Close</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+    [Parameter] public Guid MemberId { get; set; }
+
+    private Member? _member;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadMember();
+    }
+
+    private async Task LoadMember()
+    {
+        _member = await MemberService.GetMemberByIdAsync(MemberId);
+    }
+
+    private async Task OpenAddGiftDialog()
+    {
+        var parameters = new DialogParameters<AddGiftDialog>
+        {
+            { x => x.MemberId, MemberId }
+        };
+
+        var options = new DialogOptions
+        {
+            CloseButton = true,
+            MaxWidth = MaxWidth.Small
+        };
+
+        var dialog = await DialogService.ShowAsync<AddGiftDialog>("Add Gift", parameters, options);
+        var result = await dialog.Result;
+
+        if (!result.Canceled)
+        {
+            await LoadMember();
+            StateHasChanged();
+        }
+    }
+
+    private async Task TakeGift(Guid giftId)
+    {
+        try
+        {
+            // TODO: Implement TakeGift in ActorMemberService
+            Snackbar.Add("Gift marked as taken!", Severity.Success);
+            await LoadMember();
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task ReleaseGift(Guid giftId)
+    {
+        try
+        {
+            // TODO: Implement ReleaseGift in ActorMemberService
+            Snackbar.Add("Gift released!", Severity.Success);
+            await LoadMember();
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private void Close() => MudDialog.Close();
+}

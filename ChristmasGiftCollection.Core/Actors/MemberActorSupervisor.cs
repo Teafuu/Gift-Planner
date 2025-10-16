@@ -1,7 +1,7 @@
 using Akka.Actor;
 using Akka.Event;
 using ChristmasGiftCollection.Core.Actors.Commands;
-using Marten;
+using ChristmasGiftCollection.Core.Repositories;
 
 namespace ChristmasGiftCollection.Core.Actors;
 
@@ -11,13 +11,13 @@ namespace ChristmasGiftCollection.Core.Actors;
 /// </summary>
 public class MemberActorSupervisor : ReceiveActor
 {
-    private readonly IDocumentStore _documentStore;
+    private readonly IEventStoreRepository _eventStore;
     private readonly ILoggingAdapter _log = Context.GetLogger();
     private readonly Dictionary<Guid, IActorRef> _memberActors = new();
 
-    public MemberActorSupervisor(IDocumentStore documentStore)
+    public MemberActorSupervisor(IEventStoreRepository eventStore)
     {
-        _documentStore = documentStore;
+        _eventStore = eventStore;
 
         // Route all member commands to the appropriate actor
         Receive<MemberCommand>(cmd =>
@@ -29,15 +29,16 @@ public class MemberActorSupervisor : ReceiveActor
         // Handle requests to get all member IDs
         ReceiveAsync<GetAllMemberIds>(async _ =>
         {
-            await using var session = _documentStore.LightweightSession();
+            // Get all stream names from EventStore
+            var streamNames = await _eventStore.GetAllStreamNamesAsync();
 
-            // Query all streams that start with member events
-            var streamIds = await session.Events.QueryAllRawEvents()
-                .Select(e => e.StreamId)
-                .Distinct()
-                .ToListAsync();
+            // Extract member IDs from stream names (format: "member-{guid}")
+            var memberIds = streamNames
+                .Where(name => !name.Contains("&&") && name.Contains("member-"))
+                .Select(name => Guid.Parse(name.Split("member-")[1]))
+                .ToList();
 
-            Sender.Tell(streamIds);
+            Sender.Tell(memberIds);
         });
     }
 
@@ -48,9 +49,9 @@ public class MemberActorSupervisor : ReceiveActor
             return actor;
         }
 
-        // Pass DocumentStore instead of session - actor will create sessions per operation
+        // Create new actor with EventStore repository
         var newActor = Context.ActorOf(
-            MemberActor.Props(memberId, _documentStore),
+            MemberActor.Props(memberId, _eventStore),
             $"member-{memberId}");
 
         _memberActors[memberId] = newActor;
@@ -78,8 +79,8 @@ public class MemberActorSupervisor : ReceiveActor
             });
     }
 
-    public static Props Props(IDocumentStore documentStore) =>
-        Akka.Actor.Props.Create(() => new MemberActorSupervisor(documentStore));
+    public static Props Props(IEventStoreRepository eventStore) =>
+        Akka.Actor.Props.Create(() => new MemberActorSupervisor(eventStore));
 }
 
 /// <summary>

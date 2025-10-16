@@ -13,7 +13,6 @@ public record MemberCommand(Guid MemberId);
 public record CreateMember(
     Guid MemberId,
     string Name,
-    MemberType Type,
     string? Email = null,
     DateTime? DateOfBirth = null,
     string? Notes = null
@@ -25,7 +24,6 @@ public record CreateMember(
 public record UpdateMember(
     Guid MemberId,
     string? Name = null,
-    MemberType? Type = null,
     string? Email = null,
     DateTime? DateOfBirth = null,
     string? Notes = null

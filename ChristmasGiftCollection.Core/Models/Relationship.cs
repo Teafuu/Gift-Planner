@@ -46,11 +46,6 @@ public class Relationship
 /// </summary>
 public enum RelationshipType
 {
-    ParentOf,
     ChildOf,
-    SpouseOf,
-    SiblingOf,
-    GrandparentOf,
-    GrandchildOf,
-    Other
+    PartnerOf
 }

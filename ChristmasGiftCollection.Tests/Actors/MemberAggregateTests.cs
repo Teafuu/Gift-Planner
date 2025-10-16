@@ -18,7 +18,6 @@ public class MemberAggregateTests
             MemberId = memberId,
             Name = "John Doe",
             Email = "john@example.com",
-            Type = MemberType.Parent,
             DateOfBirth = new DateTime(1990, 1, 1),
             Notes = "Test member",
             Timestamp = DateTime.UtcNow
@@ -31,7 +30,6 @@ public class MemberAggregateTests
         aggregate.Id.Should().Be(memberId);
         aggregate.Name.Should().Be("John Doe");
         aggregate.Email.Should().Be("john@example.com");
-        aggregate.Type.Should().Be(MemberType.Parent);
         aggregate.DateOfBirth.Should().Be(new DateTime(1990, 1, 1));
         aggregate.Notes.Should().Be("Test member");
         aggregate.IsDeleted.Should().BeFalse();
@@ -52,7 +50,6 @@ public class MemberAggregateTests
             MemberId = memberId,
             Name = "John Doe",
             Email = "old@example.com",
-            Type = MemberType.Parent
         });
 
         // Act - Update member
@@ -61,13 +58,11 @@ public class MemberAggregateTests
             MemberId = memberId,
             Name = "Jane Smith",
             Email = "new@example.com",
-            Type = MemberType.Child
         });
 
         // Assert
         aggregate.Name.Should().Be("Jane Smith");
         aggregate.Email.Should().Be("new@example.com");
-        aggregate.Type.Should().Be(MemberType.Child);
     }
 
     [Fact]
@@ -81,7 +76,6 @@ public class MemberAggregateTests
         {
             MemberId = memberId,
             Name = "John Doe",
-            Type = MemberType.Parent
         });
 
         // Act
@@ -103,7 +97,7 @@ public class MemberAggregateTests
         var memberId = Guid.NewGuid();
         var giftId = Guid.NewGuid();
 
-        aggregate.Apply(new MemberAdded { MemberId = memberId, Name = "John", Type = MemberType.Parent });
+        aggregate.Apply(new MemberAdded { MemberId = memberId, Name = "John" });
 
         // Act
         aggregate.Apply(new GiftAdded
@@ -130,7 +124,7 @@ public class MemberAggregateTests
         var giftId = Guid.NewGuid();
         var takenByMemberId = Guid.NewGuid();
 
-        aggregate.Apply(new MemberAdded { MemberId = memberId, Name = "John", Type = MemberType.Parent });
+        aggregate.Apply(new MemberAdded { MemberId = memberId, Name = "John" });
         aggregate.Apply(new GiftAdded
         {
             GiftId = giftId,
@@ -160,7 +154,7 @@ public class MemberAggregateTests
         var memberId = Guid.NewGuid();
         var giftId = Guid.NewGuid();
 
-        aggregate.Apply(new MemberAdded { MemberId = memberId, Name = "John", Type = MemberType.Parent });
+        aggregate.Apply(new MemberAdded { MemberId = memberId, Name = "John"     });
         aggregate.Apply(new GiftAdded { GiftId = giftId, MemberId = memberId, Name = "Gift", Priority = GiftPriority.Medium });
         aggregate.Apply(new GiftTaken { GiftId = giftId, TakenByMemberId = Guid.NewGuid() });
 
@@ -185,7 +179,7 @@ public class MemberAggregateTests
         var memberId = Guid.NewGuid();
         var giftId = Guid.NewGuid();
 
-        aggregate.Apply(new MemberAdded { MemberId = memberId, Name = "John", Type = MemberType.Parent });
+        aggregate.Apply(new MemberAdded { MemberId = memberId, Name = "John" });
         aggregate.Apply(new GiftAdded { GiftId = giftId, MemberId = memberId, Name = "Gift", Priority = GiftPriority.Medium });
 
         // Act
@@ -209,7 +203,7 @@ public class MemberAggregateTests
         var relationshipId = Guid.NewGuid();
         var toMemberId = Guid.NewGuid();
 
-        aggregate.Apply(new MemberAdded { MemberId = memberId, Name = "John", Type = MemberType.Parent });
+        aggregate.Apply(new MemberAdded { MemberId = memberId, Name = "John" });
 
         // Act
         aggregate.Apply(new RelationshipAdded
@@ -217,13 +211,13 @@ public class MemberAggregateTests
             RelationshipId = relationshipId,
             FromMemberId = memberId,
             ToMemberId = toMemberId,
-            Type = RelationshipType.ParentOf
+            Type = RelationshipType.PartnerOf
         });
 
         // Assert
         aggregate.Relationships.Should().ContainKey(relationshipId);
         aggregate.Relationships[relationshipId].ToMemberId.Should().Be(toMemberId);
-        aggregate.Relationships[relationshipId].Type.Should().Be(RelationshipType.ParentOf);
+        aggregate.Relationships[relationshipId].Type.Should().Be(RelationshipType.PartnerOf);
     }
 
     [Fact]
@@ -234,24 +228,24 @@ public class MemberAggregateTests
         var memberId = Guid.NewGuid();
         var relationshipId = Guid.NewGuid();
 
-        aggregate.Apply(new MemberAdded { MemberId = memberId, Name = "John", Type = MemberType.Parent });
+        aggregate.Apply(new MemberAdded { MemberId = memberId, Name = "John" });
         aggregate.Apply(new RelationshipAdded
         {
             RelationshipId = relationshipId,
             FromMemberId = memberId,
             ToMemberId = Guid.NewGuid(),
-            Type = RelationshipType.ParentOf
+            Type = RelationshipType.PartnerOf
         });
 
         // Act
         aggregate.Apply(new RelationshipUpdated
         {
             RelationshipId = relationshipId,
-            NewType = RelationshipType.SpouseOf
+            NewType = RelationshipType.PartnerOf
         });
 
         // Assert
-        aggregate.Relationships[relationshipId].Type.Should().Be(RelationshipType.SpouseOf);
+        aggregate.Relationships[relationshipId].Type.Should().Be(RelationshipType.PartnerOf);
     }
 
     [Fact]
@@ -262,13 +256,13 @@ public class MemberAggregateTests
         var memberId = Guid.NewGuid();
         var relationshipId = Guid.NewGuid();
 
-        aggregate.Apply(new MemberAdded { MemberId = memberId, Name = "John", Type = MemberType.Parent });
+        aggregate.Apply(new MemberAdded { MemberId = memberId, Name = "John" });
         aggregate.Apply(new RelationshipAdded
         {
             RelationshipId = relationshipId,
             FromMemberId = memberId,
             ToMemberId = Guid.NewGuid(),
-            Type = RelationshipType.ParentOf
+            Type = RelationshipType.PartnerOf
         });
 
         // Act
@@ -293,9 +287,9 @@ public class MemberAggregateTests
         var relationshipId = Guid.NewGuid();
         var toMemberId = Guid.NewGuid();
 
-        aggregate.Apply(new MemberAdded { MemberId = memberId, Name = "John Doe", Email = "john@example.com", Type = MemberType.Parent });
+        aggregate.Apply(new MemberAdded { MemberId = memberId, Name = "John Doe", Email = "john@example.com"});
         aggregate.Apply(new GiftAdded { GiftId = giftId, MemberId = memberId, Name = "Gift", Priority = GiftPriority.High });
-        aggregate.Apply(new RelationshipAdded { RelationshipId = relationshipId, FromMemberId = memberId, ToMemberId = toMemberId, Type = RelationshipType.ParentOf });
+        aggregate.Apply(new RelationshipAdded { RelationshipId = relationshipId, FromMemberId = memberId, ToMemberId = toMemberId, Type = RelationshipType.PartnerOf });
 
         // Act
         var model = aggregate.ToModel();
@@ -303,11 +297,10 @@ public class MemberAggregateTests
         // Assert
         model.Id.Should().Be(memberId);
         model.Name.Should().Be("John Doe");
-        model.Type.Should().Be(MemberType.Parent);
         model.Gifts.Should().HaveCount(1);
         model.Gifts.First().Name.Should().Be("Gift");
         model.Relationships.Should().HaveCount(1);
-        model.Relationships.First().Type.Should().Be(RelationshipType.ParentOf);
+        model.Relationships.First().Type.Should().Be(RelationshipType.PartnerOf);
     }
 
     [Fact]
@@ -318,11 +311,11 @@ public class MemberAggregateTests
         var memberId = Guid.NewGuid();
 
         // Act - Replay event history
-        aggregate.Apply(new MemberAdded { MemberId = memberId, Name = "John", Type = MemberType.Parent });
+        aggregate.Apply(new MemberAdded { MemberId = memberId, Name = "John" });
         aggregate.Apply(new MemberUpdated { MemberId = memberId, Name = "John Doe" });
         aggregate.Apply(new GiftAdded { GiftId = Guid.NewGuid(), MemberId = memberId, Name = "Gift 1", Priority = GiftPriority.Low });
         aggregate.Apply(new GiftAdded { GiftId = Guid.NewGuid(), MemberId = memberId, Name = "Gift 2", Priority = GiftPriority.Medium });
-        aggregate.Apply(new RelationshipAdded { RelationshipId = Guid.NewGuid(), FromMemberId = memberId, ToMemberId = Guid.NewGuid(), Type = RelationshipType.ParentOf });
+        aggregate.Apply(new RelationshipAdded { RelationshipId = Guid.NewGuid(), FromMemberId = memberId, ToMemberId = Guid.NewGuid(), Type = RelationshipType.PartnerOf });
 
         // Assert
         aggregate.Name.Should().Be("John Doe");

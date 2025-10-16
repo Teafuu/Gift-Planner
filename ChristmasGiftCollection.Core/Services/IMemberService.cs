@@ -20,13 +20,13 @@ public interface IMemberService
     /// <summary>
     /// Create a new member
     /// </summary>
-    Task<Member> CreateMemberAsync(string name, MemberType type, string? email = null,
+    Task<Member> CreateMemberAsync(string name, string? email = null,
         DateTime? dateOfBirth = null, string? notes = null, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Update an existing member
     /// </summary>
-    Task<Member> UpdateMemberAsync(Guid id, string? name = null, MemberType? type = null,
+    Task<Member> UpdateMemberAsync(Guid id, string? name = null,
         string? email = null, DateTime? dateOfBirth = null, string? notes = null,
         CancellationToken cancellationToken = default);
 
@@ -39,4 +39,24 @@ public interface IMemberService
     /// Get members for graph visualization
     /// </summary>
     Task<object> GetMembersForGraphAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Add a gift to a member
+    /// </summary>
+    Task AddGiftAsync(Guid memberId, string name, string? description, GiftPriority priority, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Take a gift (mark as taken by someone)
+    /// </summary>
+    Task TakeGiftAsync(Guid memberId, Guid giftId, Guid takenByMemberId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Release a gift (mark as available again)
+    /// </summary>
+    Task ReleaseGiftAsync(Guid memberId, Guid giftId, Guid releasedByMemberId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Add a relationship between members
+    /// </summary>
+    Task AddRelationshipAsync(Guid fromMemberId, Guid toMemberId, RelationshipType type, CancellationToken cancellationToken = default);
 }

@@ -11,7 +11,6 @@ public class MemberAggregate
     public Guid Id { get; private set; }
     public string Name { get; private set; } = string.Empty;
     public string? Email { get; private set; }
-    public MemberType Type { get; private set; }
     public DateTime? DateOfBirth { get; private set; }
     public string? Notes { get; private set; }
     public DateTime CreatedAt { get; private set; }
@@ -29,7 +28,6 @@ public class MemberAggregate
         Id = evt.MemberId;
         Name = evt.Name;
         Email = evt.Email;
-        Type = evt.Type;
         DateOfBirth = evt.DateOfBirth;
         Notes = evt.Notes;
         CreatedAt = evt.Timestamp;
@@ -44,7 +42,6 @@ public class MemberAggregate
     {
         if (evt.Name != null) Name = evt.Name;
         if (evt.Email != null) Email = evt.Email;
-        if (evt.Type.HasValue) Type = evt.Type.Value;
         if (evt.DateOfBirth.HasValue) DateOfBirth = evt.DateOfBirth;
         if (evt.Notes != null) Notes = evt.Notes;
         UpdatedAt = evt.Timestamp;
@@ -168,7 +165,6 @@ public class MemberAggregate
         {
             Id = Id,
             Name = Name,
-            Type = Type,
             CreatedAt = CreatedAt,
             UpdatedAt = UpdatedAt,
             Gifts = Gifts.Values.Select(g => g.ToModel(Id)).ToList(),

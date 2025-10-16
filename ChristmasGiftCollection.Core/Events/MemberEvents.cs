@@ -18,7 +18,6 @@ public class MemberAdded : MemberEvent
 {
     public string Name { get; set; } = string.Empty;
     public string? Email { get; set; }
-    public MemberType Type { get; set; }
     public DateTime? DateOfBirth { get; set; }
     public string? Notes { get; set; }
 }
@@ -30,7 +29,6 @@ public class MemberUpdated : MemberEvent
 {
     public string? Name { get; set; }
     public string? Email { get; set; }
-    public MemberType? Type { get; set; }
     public DateTime? DateOfBirth { get; set; }
     public string? Notes { get; set; }
 }

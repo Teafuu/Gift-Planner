@@ -14,7 +14,6 @@ public class MemberTests
         // Assert
         member.Id.Should().BeEmpty();
         member.Name.Should().BeEmpty();
-        member.Type.Should().Be(MemberType.Parent);
         member.Gifts.Should().BeEmpty();
         member.Relationships.Should().BeEmpty();
     }
@@ -35,7 +34,6 @@ public class MemberTests
         {
             Id = id,
             Name = name,
-            Type = MemberType.Parent,
             CreatedAt = createdAt,
             UpdatedAt = updatedAt
         };
@@ -43,29 +41,8 @@ public class MemberTests
         // Assert
         member.Id.Should().Be(id);
         member.Name.Should().Be(name);
-        member.Type.Should().Be(MemberType.Parent);
         member.CreatedAt.Should().Be(createdAt);
         member.UpdatedAt.Should().Be(updatedAt);
-    }
-
-    [Fact]
-    public void Member_ShouldSupportAdultType()
-    {
-        // Arrange & Act
-        var member = new Member { Type = MemberType.Parent };
-
-        // Assert
-        member.Type.Should().Be(MemberType.Parent);
-    }
-
-    [Fact]
-    public void Member_ShouldSupportChildType()
-    {
-        // Arrange & Act
-        var member = new Member { Type = MemberType.Child };
-
-        // Assert
-        member.Type.Should().Be(MemberType.Child);
     }
 
     [Fact]
@@ -98,7 +75,7 @@ public class MemberTests
             Id = Guid.NewGuid(),
             FromMemberId = member.Id,
             ToMemberId = Guid.NewGuid(),
-            Type = RelationshipType.ParentOf
+            Type = RelationshipType.PartnerOf
         };
 
         // Act

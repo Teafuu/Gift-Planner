@@ -13,7 +13,7 @@ public class RelationshipEventsTests
         var relationshipId = Guid.NewGuid();
         var fromMemberId = Guid.NewGuid();
         var toMemberId = Guid.NewGuid();
-        var type = RelationshipType.ParentOf;
+        var type = RelationshipType.PartnerOf;
 
         // Act
         var relationshipAdded = new RelationshipAdded
@@ -33,13 +33,8 @@ public class RelationshipEventsTests
     }
 
     [Theory]
-    [InlineData(RelationshipType.ParentOf)]
+    [InlineData(RelationshipType.PartnerOf)]
     [InlineData(RelationshipType.ChildOf)]
-    [InlineData(RelationshipType.SpouseOf)]
-    [InlineData(RelationshipType.SiblingOf)]
-    [InlineData(RelationshipType.GrandparentOf)]
-    [InlineData(RelationshipType.GrandchildOf)]
-    [InlineData(RelationshipType.Other)]
     public void RelationshipAdded_ShouldSupportAllRelationshipTypes(RelationshipType type)
     {
         // Arrange & Act
@@ -60,7 +55,7 @@ public class RelationshipEventsTests
     {
         // Arrange
         var relationshipId = Guid.NewGuid();
-        var newType = RelationshipType.SpouseOf;
+        var newType = RelationshipType.PartnerOf;
 
         // Act
         var relationshipUpdated = new RelationshipUpdated
@@ -120,7 +115,7 @@ public class RelationshipEventsTests
             RelationshipId = Guid.NewGuid(),
             FromMemberId = Guid.NewGuid(),
             ToMemberId = Guid.NewGuid(),
-            Type = RelationshipType.ParentOf
+            Type = RelationshipType.PartnerOf
         };
 
         // Assert
@@ -140,7 +135,7 @@ public class RelationshipEventsTests
             RelationshipId = Guid.NewGuid(),
             FromMemberId = fromMemberId,
             ToMemberId = toMemberId,
-            Type = RelationshipType.ParentOf
+            Type = RelationshipType.PartnerOf
         };
 
         // Assert

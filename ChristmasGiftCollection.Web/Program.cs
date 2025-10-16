@@ -1,8 +1,9 @@
 using Akka.Actor;
 using Akka.DependencyInjection;
 using ChristmasGiftCollection.Core.Actors;
+using ChristmasGiftCollection.Core.Repositories;
 using ChristmasGiftCollection.Web.Components;
-using Marten;
+using EventStore.Client;
 using MudBlazor.Services;
 using Serilog;
 
@@ -21,25 +22,17 @@ builder.Host.UseSerilog((context, configuration) =>
 
 builder.AddServiceDefaults();
 
-builder.AddNpgsqlDataSource("giftcollection");
+// Configure EventStore client
+var eventstoreConnectionString = builder.Configuration.GetConnectionString("eventstore")
+    ?? "esdb://eventstore:2113?tls=false"; // fallback for Aspire network
 
-builder.Services.AddMarten(sp =>
+builder.Services.AddSingleton(sp =>
 {
-    var configuration = sp.GetRequiredService<IConfiguration>();
-    var connectionString = configuration.GetConnectionString("giftcollection")
-        ?? throw new InvalidOperationException("PostgreSQL connection string 'giftcollection' not found.");
-
-    var options = new StoreOptions();
-    options.Connection(connectionString);
-    options.DatabaseSchemaName = "gift_collection";
-
-    // Configure for event sourcing
-    options.Events.DatabaseSchemaName = "gift_collection_events";
-
-    return options;
-})
-.UseLightweightSessions()
-.ApplyAllDatabaseChangesOnStartup();
+    var settings = EventStoreClientSettings.Create(eventstoreConnectionString);
+    return new EventStoreClient(settings);
+});
+// Register EventStore repository
+builder.Services.AddSingleton<IEventStoreRepository, EventStoreRepository>();
 
 // Add services to the container.
 builder.Services.AddRazorComponents()
@@ -58,8 +51,8 @@ builder.Services.AddSingleton(sp =>
     var actorSystem = ActorSystem.Create("ChristmasGiftCollection", actorSystemSetup);
 
     // Create the MemberActorSupervisor
-    var documentStore = sp.GetRequiredService<IDocumentStore>();
-    var supervisor = actorSystem.ActorOf(MemberActorSupervisor.Props(documentStore), "member-supervisor");
+    var eventStore = sp.GetRequiredService<IEventStoreRepository>();
+    var supervisor = actorSystem.ActorOf(MemberActorSupervisor.Props(eventStore), "member-supervisor");
 
     return actorSystem;
 });

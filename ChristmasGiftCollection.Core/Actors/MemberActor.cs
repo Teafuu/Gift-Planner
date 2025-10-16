@@ -2,7 +2,7 @@ using Akka.Actor;
 using Akka.Event;
 using ChristmasGiftCollection.Core.Actors.Commands;
 using ChristmasGiftCollection.Core.Events;
-using Marten;
+using ChristmasGiftCollection.Core.Repositories;
 
 namespace ChristmasGiftCollection.Core.Actors;
 
@@ -12,17 +12,19 @@ namespace ChristmasGiftCollection.Core.Actors;
 /// </summary>
 public class MemberActor : ReceiveActor, IWithStash
 {
-    private readonly IDocumentStore _documentStore;
+    private readonly IEventStoreRepository _eventStore;
     private readonly ILoggingAdapter _log = Context.GetLogger();
     private readonly Guid _memberId;
+    private readonly string _streamName;
     private MemberAggregate _state = new();
 
     public IStash Stash { get; set; } = null!;
 
-    public MemberActor(Guid memberId, IDocumentStore documentStore)
+    public MemberActor(Guid memberId, IEventStoreRepository eventStore)
     {
         _memberId = memberId;
-        _documentStore = documentStore;
+        _eventStore = eventStore;
+        _streamName = $"member-{memberId}";
 
         // Load state from events on actor initialization
         Become(Loading);
@@ -36,16 +38,13 @@ public class MemberActor : ReceiveActor, IWithStash
             {
                 _log.Info($"Loading state for member {_memberId}");
 
-                // Create session for this operation
-                await using var session = _documentStore.LightweightSession();
-
-                // Load all events for this member from Marten
-                var events = await session.Events.FetchStreamAsync(_memberId);
+                // Load all events for this member from EventStore
+                var events = await _eventStore.ReadStreamAsync(_streamName);
 
                 // Replay events to build current state
                 foreach (var evt in events)
                 {
-                    ApplyEvent(evt.Data);
+                    ApplyEvent(evt);
                 }
 
                 _log.Info($"Loaded {events.Count} events for member {_memberId}");
@@ -83,7 +82,6 @@ public class MemberActor : ReceiveActor, IWithStash
                 MemberId = cmd.MemberId,
                 Name = cmd.Name,
                 Email = cmd.Email,
-                Type = cmd.Type,
                 DateOfBirth = cmd.DateOfBirth,
                 Notes = cmd.Notes
             };
@@ -106,7 +104,6 @@ public class MemberActor : ReceiveActor, IWithStash
                 MemberId = cmd.MemberId,
                 Name = cmd.Name,
                 Email = cmd.Email,
-                Type = cmd.Type,
                 DateOfBirth = cmd.DateOfBirth,
                 Notes = cmd.Notes
             };
@@ -320,12 +317,8 @@ public class MemberActor : ReceiveActor, IWithStash
     {
         try
         {
-            // Create session for this operation
-            using var session = _documentStore.LightweightSession();
-
-            // Append event to member's stream
-            session.Events.Append(_memberId, evt);
-            session.SaveChangesAsync().Wait();
+            // Append event to member's stream in EventStore
+            _eventStore.AppendEventAsync(_streamName, evt).Wait();
 
             // Apply event to in-memory state
             ApplyEvent(evt);
@@ -388,8 +381,8 @@ public class MemberActor : ReceiveActor, IWithStash
         Self.Tell(new LoadState());
     }
 
-    public static Props Props(Guid memberId, IDocumentStore documentStore) =>
-        Akka.Actor.Props.Create(() => new MemberActor(memberId, documentStore));
+    public static Props Props(Guid memberId, IEventStoreRepository eventStore) =>
+        Akka.Actor.Props.Create(() => new MemberActor(memberId, eventStore));
 }
 
 // Internal messages

@@ -482,3 +482,6 @@ $RECYCLE.BIN/
 
 # Vim temporary swap files
 *.swp
+/ChristmasGiftCollection.AppHost/eventstore-data
+/ChristmasGiftCollection.AppHost/eventstore-data-gift
+/ChristmasGiftCollection.AppHost/eventstore-logs/0.0.0.0-2113-cluster-node

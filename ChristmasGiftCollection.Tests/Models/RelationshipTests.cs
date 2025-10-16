@@ -15,7 +15,7 @@ public class RelationshipTests
         relationship.Id.Should().BeEmpty();
         relationship.FromMemberId.Should().BeEmpty();
         relationship.ToMemberId.Should().BeEmpty();
-        relationship.Type.Should().Be(RelationshipType.ParentOf);
+        relationship.Type.Should().Be(RelationshipType.ChildOf);
         relationship.FromMember.Should().BeNull();
         relationship.ToMember.Should().BeNull();
     }
@@ -27,7 +27,7 @@ public class RelationshipTests
         var id = Guid.NewGuid();
         var fromMemberId = Guid.NewGuid();
         var toMemberId = Guid.NewGuid();
-        var type = RelationshipType.SpouseOf;
+        var type = RelationshipType.PartnerOf;
         var createdAt = DateTime.UtcNow;
 
         // Act
@@ -49,13 +49,8 @@ public class RelationshipTests
     }
 
     [Theory]
-    [InlineData(RelationshipType.ParentOf)]
+    [InlineData(RelationshipType.PartnerOf)]
     [InlineData(RelationshipType.ChildOf)]
-    [InlineData(RelationshipType.SpouseOf)]
-    [InlineData(RelationshipType.SiblingOf)]
-    [InlineData(RelationshipType.GrandparentOf)]
-    [InlineData(RelationshipType.GrandchildOf)]
-    [InlineData(RelationshipType.Other)]
     public void Relationship_ShouldSupportAllRelationshipTypes(RelationshipType type)
     {
         // Arrange & Act
@@ -77,13 +72,13 @@ public class RelationshipTests
         {
             FromMemberId = parentId,
             ToMemberId = childId,
-            Type = RelationshipType.ParentOf
+            Type = RelationshipType.ChildOf
         };
 
         // Assert
         relationship.FromMemberId.Should().Be(parentId);
         relationship.ToMemberId.Should().Be(childId);
-        relationship.Type.Should().Be(RelationshipType.ParentOf);
+        relationship.Type.Should().Be(RelationshipType.ChildOf);
     }
 
     [Fact]
@@ -98,55 +93,13 @@ public class RelationshipTests
         {
             FromMemberId = spouse1Id,
             ToMemberId = spouse2Id,
-            Type = RelationshipType.SpouseOf
+            Type = RelationshipType.PartnerOf
         };
 
         // Assert
         relationship.FromMemberId.Should().Be(spouse1Id);
         relationship.ToMemberId.Should().Be(spouse2Id);
-        relationship.Type.Should().Be(RelationshipType.SpouseOf);
-    }
-
-    [Fact]
-    public void Relationship_ShouldSupportSiblingRelationship()
-    {
-        // Arrange
-        var sibling1Id = Guid.NewGuid();
-        var sibling2Id = Guid.NewGuid();
-
-        // Act
-        var relationship = new Relationship
-        {
-            FromMemberId = sibling1Id,
-            ToMemberId = sibling2Id,
-            Type = RelationshipType.SiblingOf
-        };
-
-        // Assert
-        relationship.FromMemberId.Should().Be(sibling1Id);
-        relationship.ToMemberId.Should().Be(sibling2Id);
-        relationship.Type.Should().Be(RelationshipType.SiblingOf);
-    }
-
-    [Fact]
-    public void Relationship_ShouldSupportGrandparentGrandchildRelationship()
-    {
-        // Arrange
-        var grandparentId = Guid.NewGuid();
-        var grandchildId = Guid.NewGuid();
-
-        // Act
-        var relationship = new Relationship
-        {
-            FromMemberId = grandparentId,
-            ToMemberId = grandchildId,
-            Type = RelationshipType.GrandparentOf
-        };
-
-        // Assert
-        relationship.FromMemberId.Should().Be(grandparentId);
-        relationship.ToMemberId.Should().Be(grandchildId);
-        relationship.Type.Should().Be(RelationshipType.GrandparentOf);
+        relationship.Type.Should().Be(RelationshipType.PartnerOf);
     }
 
     [Fact]
@@ -197,7 +150,7 @@ public class RelationshipTests
         {
             FromMemberId = member1Id,
             ToMemberId = member2Id,
-            Type = RelationshipType.ParentOf
+            Type = RelationshipType.PartnerOf
         };
 
         var relationship2 = new Relationship
@@ -210,7 +163,7 @@ public class RelationshipTests
         // Assert
         relationship1.FromMemberId.Should().Be(member1Id);
         relationship1.ToMemberId.Should().Be(member2Id);
-        relationship1.Type.Should().Be(RelationshipType.ParentOf);
+        relationship1.Type.Should().Be(RelationshipType.PartnerOf);
 
         relationship2.FromMemberId.Should().Be(member2Id);
         relationship2.ToMemberId.Should().Be(member1Id);

@@ -15,10 +15,6 @@ public class Member
     /// </summary>
     public string Name { get; set; } = string.Empty;
 
-    /// <summary>
-    /// Member type: Adult or Child
-    /// </summary>
-    public MemberType Type { get; set; }
 
     /// <summary>
     /// List of gift ideas associated with this member
@@ -39,13 +35,4 @@ public class Member
     /// When this member was last updated
     /// </summary>
     public DateTime UpdatedAt { get; set; }
-}
-
-/// <summary>
-/// Type of family member for graph visualization
-/// </summary>
-public enum MemberType
-{
-    Parent,
-    Child
 }

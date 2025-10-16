@@ -53,7 +53,6 @@ public class ActorMemberService(ActorSystem actorSystem) : IMemberService
 
     public async Task<Member> CreateMemberAsync(
         string name,
-        MemberType type,
         string? email = null,
         DateTime? dateOfBirth = null,
         string? notes = null,
@@ -62,7 +61,7 @@ public class ActorMemberService(ActorSystem actorSystem) : IMemberService
         var memberId = Guid.NewGuid();
         var supervisor = GetSupervisor();
 
-        var command = new CreateMember(memberId, name, type, email, dateOfBirth, notes);
+        var command = new CreateMember(memberId, name, email, dateOfBirth, notes);
         var result = await supervisor.Ask<object>(command, _timeout);
 
         if (result is CommandFailure failure)
@@ -78,7 +77,6 @@ public class ActorMemberService(ActorSystem actorSystem) : IMemberService
     public async Task<Member> UpdateMemberAsync(
         Guid id,
         string? name = null,
-        MemberType? type = null,
         string? email = null,
         DateTime? dateOfBirth = null,
         string? notes = null,
@@ -86,7 +84,7 @@ public class ActorMemberService(ActorSystem actorSystem) : IMemberService
     {
         var supervisor = GetSupervisor();
 
-        var command = new UpdateMember(id, name, type, email, dateOfBirth, notes);
+        var command = new UpdateMember(id, name, email, dateOfBirth, notes);
         var result = await supervisor.Ask<object>(command, _timeout);
 
         if (result is CommandFailure failure)
@@ -121,8 +119,7 @@ public class ActorMemberService(ActorSystem actorSystem) : IMemberService
         {
             id = m.Id,
             label = m.Name,
-            group = m.Type.ToString().ToLower(),
-            title = $"{m.Name} ({m.Type})"
+            title = $"{m.Name}"
         }).ToList();
 
         // Transform relationships into graph edges
@@ -139,6 +136,60 @@ public class ActorMemberService(ActorSystem actorSystem) : IMemberService
             nodes,
             edges
         };
+    }
+
+    public async Task AddGiftAsync(Guid memberId, string name, string? description, GiftPriority priority, CancellationToken cancellationToken = default)
+    {
+        var supervisor = GetSupervisor();
+        var giftId = Guid.NewGuid();
+
+        var command = new AddGift(memberId, giftId, name, description, null, null, priority);
+        var result = await supervisor.Ask<object>(command, _timeout);
+
+        if (result is CommandFailure failure)
+        {
+            throw failure.Exception;
+        }
+    }
+
+    public async Task TakeGiftAsync(Guid memberId, Guid giftId, Guid takenByMemberId, CancellationToken cancellationToken = default)
+    {
+        var supervisor = GetSupervisor();
+
+        var command = new TakeGift(memberId, giftId, takenByMemberId);
+        var result = await supervisor.Ask<object>(command, _timeout);
+
+        if (result is CommandFailure failure)
+        {
+            throw failure.Exception;
+        }
+    }
+
+    public async Task ReleaseGiftAsync(Guid memberId, Guid giftId, Guid releasedByMemberId, CancellationToken cancellationToken = default)
+    {
+        var supervisor = GetSupervisor();
+
+        var command = new ReleaseGift(memberId, giftId, releasedByMemberId);
+        var result = await supervisor.Ask<object>(command, _timeout);
+
+        if (result is CommandFailure failure)
+        {
+            throw failure.Exception;
+        }
+    }
+
+    public async Task AddRelationshipAsync(Guid fromMemberId, Guid toMemberId, RelationshipType type, CancellationToken cancellationToken = default)
+    {
+        var supervisor = GetSupervisor();
+        var relationshipId = Guid.NewGuid();
+
+        var command = new AddRelationship(fromMemberId, relationshipId, toMemberId, type);
+        var result = await supervisor.Ask<object>(command, _timeout);
+
+        if (result is CommandFailure failure)
+        {
+            throw failure.Exception;
+        }
     }
 }
 

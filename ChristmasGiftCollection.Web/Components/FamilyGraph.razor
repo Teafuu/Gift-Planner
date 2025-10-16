@@ -1,12 +1,15 @@
 @inject IJSRuntime JS
 @using ChristmasGiftCollection.Core.Services
 @using ChristmasGiftCollection.Core.Models
+@using Microsoft.JSInterop
 @inject IMemberService MemberService
 @implements IAsyncDisposable
 
-<div id="family-graph" style="width: 100%; height: 520px; position: relative;"></div>
+<div id="family-graph" style="width: 100%; height: 100%;"></div>
 
 @code {
+    [Parameter] public EventCallback<Guid> OnNodeClicked { get; set; }
+
     private IJSObjectReference? _module;
     private DotNetObjectReference<FamilyGraph>? _objRef;
 
@@ -16,65 +19,88 @@
         {
             _objRef = DotNetObjectReference.Create(this);
             _module = await JS.InvokeAsync<IJSObjectReference>("import", "./js/familyGraph.js");
-
-            // Initialize with sample data for Phase 2
             await InitializeGraphAsync();
         }
+    }
+
+    public async Task RefreshAsync()
+    {
+        await InitializeGraphAsync();
     }
 
     private async Task InitializeGraphAsync()
     {
         if (_module != null)
         {
-            // TODO: Load real data from event sourcing
-            // var members = await MemberService.GetAllMembersAsync();
-            // var graphData = BuildGraphData(members);
-            // await _module.InvokeVoidAsync("initializeGraph", "family-graph", graphData, _objRef);
-
-            // For now, use sample data
-            var sampleData = GetSampleData();
-            await _module.InvokeVoidAsync("initializeGraph", "family-graph", sampleData, _objRef);
+            try
+            {
+                // Load real data from event sourcing
+                var members = await MemberService.GetAllMembersAsync();
+                var graphData = BuildGraphData(members);
+                await _module.InvokeVoidAsync("initializeGraph", "family-graph", graphData, _objRef);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error initializing graph: {ex.Message}");
+                // Initialize with empty data on error
+                var emptyData = new { nodes = Array.Empty<object>(), edges = Array.Empty<object>() };
+                await _module.InvokeVoidAsync("initializeGraph", "family-graph", emptyData, _objRef);
+            }
         }
     }
 
-    private object GetSampleData()
+    private object BuildGraphData(IEnumerable<Member> members)
     {
-        return new
+        var nodes = members.Select(m => new
         {
-            nodes = new[]
+            id = m.Id.ToString(),
+            label = m.Name,
+            title = $"{m.Name}\nClick to view gifts and details",
+            giftCount = m.Gifts.Count
+        }).ToList();
+
+        var edges = members
+            .SelectMany(m => m.Relationships.Select(r => new
             {
-                new { id = 2, label = "Mary", group = "adult", title = "Click to view details" },
-                new { id = 3, label = "Sarah", group = "child", title = "Click to view details" },
-                new { id = 4, label = "Tom", group = "child", title = "Click to view details" }
-            },
-            edges = new[]
-            {
-                new { from = 2, to = 3, label = "parent", arrows = "to" },
-                new { from = 2, to = 4, label = "parent", arrows = "to" }
-            }
-        };
+                from = r.FromMemberId.ToString(),
+                to = r.ToMemberId.ToString(),
+                label = r.Type.ToString().Replace("Of", " of "),
+                arrows = "to"
+            }))
+            .ToList();
+
+        return new { nodes, edges };
     }
 
     [JSInvokable]
-    public void OnNodeClick(int nodeId)
+    public async Task OnNodeClick(string nodeId)
     {
-        // Will be implemented in Phase 5 - Member Management UI
-        Console.WriteLine($"Node clicked: {nodeId}");
-    }
-
-    [JSInvokable]
-    public void OnNodeDoubleClick(int nodeId)
-    {
-        // Will be implemented in Phase 5 - Member Management UI
-        Console.WriteLine($"Node double-clicked: {nodeId}");
+        if (Guid.TryParse(nodeId, out var memberId))
+        {
+            await OnNodeClicked.InvokeAsync(memberId);
+        }
     }
 
     public async ValueTask DisposeAsync()
     {
-        if (_module != null)
+        try
         {
-            await _module.DisposeAsync();
+            if (_module != null)
+            {
+                await _module.DisposeAsync();
+            }
         }
-        _objRef?.Dispose();
+        catch (JSDisconnectedException)
+        {
+            // Circuit disconnected during disposal - this is expected and can be safely ignored
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error disposing graph module: {ex.Message}");
+        }
+        finally
+        {
+            _objRef?.Dispose();
+        }
     }
 }

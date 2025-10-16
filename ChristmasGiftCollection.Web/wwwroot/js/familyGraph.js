@@ -35,7 +35,7 @@ export function initializeGraph(containerId, data, dotNetReference) {
             }
         },
         groups: {
-            adult: {
+            parent: {
                 color: {
                     background: '#ef5350',  // Christmas red
                     border: '#c62828',

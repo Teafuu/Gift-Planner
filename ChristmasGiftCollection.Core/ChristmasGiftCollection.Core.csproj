@@ -9,7 +9,7 @@
   <ItemGroup>
     <PackageReference Include="Akka" Version="1.5.53" />
     <PackageReference Include="Akka.Hosting" Version="1.5.53" />
-    <PackageReference Include="Marten" Version="8.13.1" />
+    <PackageReference Include="EventStore.Client.Grpc.Streams" Version="23.3.9" />
   </ItemGroup>
 
 </Project>
