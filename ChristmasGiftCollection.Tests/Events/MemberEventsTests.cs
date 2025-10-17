@@ -13,7 +13,6 @@ public class MemberEventsTests
         var memberId = Guid.NewGuid();
         var name = "John Doe";
         var email = "john@example.com";
-        var type = MemberType.Parent;
         var dateOfBirth = new DateTime(1990, 1, 1);
         var notes = "Test notes";
 
@@ -23,7 +22,6 @@ public class MemberEventsTests
             MemberId = memberId,
             Name = name,
             Email = email,
-            Type = type,
             DateOfBirth = dateOfBirth,
             Notes = notes
         };
@@ -32,7 +30,6 @@ public class MemberEventsTests
         memberAdded.MemberId.Should().Be(memberId);
         memberAdded.Name.Should().Be(name);
         memberAdded.Email.Should().Be(email);
-        memberAdded.Type.Should().Be(type);
         memberAdded.DateOfBirth.Should().Be(dateOfBirth);
         memberAdded.Notes.Should().Be(notes);
         memberAdded.Timestamp.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(5));
@@ -45,8 +42,7 @@ public class MemberEventsTests
         var memberAdded = new MemberAdded
         {
             MemberId = Guid.NewGuid(),
-            Name = "Jane Doe",
-            Type = MemberType.Child
+            Name = "Jane Doe"
         };
 
         // Assert
@@ -62,7 +58,6 @@ public class MemberEventsTests
         var memberId = Guid.NewGuid();
         var name = "Updated Name";
         var email = "updated@example.com";
-        var type = MemberType.Child;
         var dateOfBirth = new DateTime(2010, 5, 15);
         var notes = "Updated notes";
 
@@ -72,7 +67,6 @@ public class MemberEventsTests
             MemberId = memberId,
             Name = name,
             Email = email,
-            Type = type,
             DateOfBirth = dateOfBirth,
             Notes = notes
         };
@@ -81,7 +75,6 @@ public class MemberEventsTests
         memberUpdated.MemberId.Should().Be(memberId);
         memberUpdated.Name.Should().Be(name);
         memberUpdated.Email.Should().Be(email);
-        memberUpdated.Type.Should().Be(type);
         memberUpdated.DateOfBirth.Should().Be(dateOfBirth);
         memberUpdated.Notes.Should().Be(notes);
         memberUpdated.Timestamp.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(5));
@@ -100,7 +93,6 @@ public class MemberEventsTests
         // Assert
         memberUpdated.Name.Should().Be("Only Name Updated");
         memberUpdated.Email.Should().BeNull();
-        memberUpdated.Type.Should().BeNull();
         memberUpdated.DateOfBirth.Should().BeNull();
         memberUpdated.Notes.Should().BeNull();
     }

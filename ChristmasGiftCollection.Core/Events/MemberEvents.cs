@@ -20,6 +20,7 @@ public class MemberAdded : MemberEvent
     public string? Email { get; set; }
     public DateTime? DateOfBirth { get; set; }
     public string? Notes { get; set; }
+    public bool IsAdmin { get; set; } = false;
 }
 
 /// <summary>
@@ -39,4 +40,12 @@ public class MemberUpdated : MemberEvent
 public class MemberRemoved : MemberEvent
 {
     public string Reason { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Event raised when a member's PIN code is set or changed
+/// </summary>
+public class MemberPinCodeSet : MemberEvent
+{
+    public string PinCode { get; set; } = string.Empty;
 }

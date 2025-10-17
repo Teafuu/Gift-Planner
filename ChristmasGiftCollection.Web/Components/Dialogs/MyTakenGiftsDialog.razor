@@ -1,0 +1,133 @@
+@using ChristmasGiftCollection.Core.Models
+@using ChristmasGiftCollection.Core.Services
+@using ChristmasGiftCollection.Web.Services
+@inject IMemberService MemberService
+@inject IAuthenticationService AuthService
+@inject ISnackbar Snackbar
+@rendermode InteractiveServer
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">Mine reserverte gaver</MudText>
+    </TitleContent>
+    <DialogContent>
+        @if (_isLoading)
+        {
+            <div class="d-flex justify-center align-center" style="min-height: 200px;">
+                <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+            </div>
+        }
+        else if (!_takenGifts.Any())
+        {
+            <MudAlert Severity="Severity.Info">
+                Du har ikke reservert noen gaver ennå.
+            </MudAlert>
+        }
+        else
+        {
+            <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">
+                Du har reservert @_takenGifts.Count @(_takenGifts.Count == 1 ? "gave" : "gaver")
+            </MudText>
+
+            @foreach (var (gift, owner) in _takenGifts.OrderBy(x => x.owner.Name).ThenBy(x => x.gift.Name))
+            {
+                <MudCard Class="mb-2" Elevation="2">
+                    <MudCardContent>
+                        <div class="d-flex justify-space-between align-center">
+                            <div style="flex: 1;">
+                                <MudText Typo="Typo.body1">
+                                    <strong>@gift.Name</strong>
+                                </MudText>
+                                @if (!string.IsNullOrEmpty(gift.Description))
+                                {
+                                    <MudText Typo="Typo.body2" Color="Color.Secondary">@gift.Description</MudText>
+                                }
+                                <MudText Typo="Typo.caption" Color="Color.Primary">
+                                    Reservert til: @owner.Name
+                                </MudText>
+                                @if (gift.TakenAt.HasValue)
+                                {
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                        Reservert: @gift.TakenAt.Value.ToString("dd. MMM yyyy")
+                                    </MudText>
+                                }
+                            </div>
+                            <div>
+                                <MudButton Size="Size.Small"
+                                           Variant="Variant.Outlined"
+                                           Color="Color.Default"
+                                           OnClick="@(() => ReleaseGift(owner.Id, gift.Id))">
+                                    Frigi
+                                </MudButton>
+                            </div>
+                        </div>
+                    </MudCardContent>
+                </MudCard>
+            }
+        }
+    </DialogContent>
+    <DialogActions>
+<div class="mt-4">
+            <MudButton Variant="Variant.Filled"
+            Color="Color.Primary"
+            FullWidth="true"
+            OnClick="Close">
+                Lukk
+            </MudButton>
+        </div>    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+
+    private List<(Gift gift, Member owner)> _takenGifts = new();
+    private bool _isLoading = true;
+    private Guid? _currentMemberId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _currentMemberId = AuthService.GetCurrentMemberId();
+
+        if (_currentMemberId.HasValue)
+        {
+            await LoadTakenGifts();
+        }
+
+        _isLoading = false;
+    }
+
+    private async Task LoadTakenGifts()
+    {
+        if (!_currentMemberId.HasValue) return;
+
+        try
+        {
+            _takenGifts = await MemberService.GetGiftsTakenByMemberAsync(_currentMemberId.Value);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Feil ved lasting av gaver: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task ReleaseGift(Guid ownerId, Guid giftId)
+    {
+        if (!_currentMemberId.HasValue) return;
+
+        try
+        {
+            await MemberService.ReleaseGiftAsync(ownerId, giftId, _currentMemberId.Value);
+            Snackbar.Add("Gave frigitt!", Severity.Success);
+
+            // Reload the list
+            await LoadTakenGifts();
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Feil: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private void Close() => MudDialog.Close();
+}

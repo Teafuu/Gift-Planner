@@ -1,21 +1,88 @@
 @using ChristmasGiftCollection.Web.Themes
+@using ChristmasGiftCollection.Web.Services
+@using ChristmasGiftCollection.Web.Components.Dialogs
+@using ChristmasGiftCollection.Core.Services
+@using ChristmasGiftCollection.Core.Models
+@using MudBlazor
+@inject IAuthenticationService AuthService
+@inject IMemberService MemberService
+@inject ISecretSantaService SecretSantaService
+@inject NavigationManager Navigation
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
 @inherits LayoutComponentBase
 
-<MudThemeProvider Theme="@ChristmasTheme.Theme" @bind-IsDarkMode="@_isDarkMode" />
+<MudThemeProvider Theme="@ChristmasTheme.Theme" IsDarkMode="true"/>
 <MudPopoverProvider />
 <MudDialogProvider />
 <MudSnackbarProvider />
 
 
 <MudLayout>
-    <MudAppBar Elevation="1">
-        <MudText Typo="Typo.h5" Class="ml-3">Family Gift Collection 2025</MudText>
-        <MudSpacer />
+    <MudAppBar Fixed="false" Color="Color.Transparent" Style="margin-bottom: 5px; padding-top: 5px; padding-right: 0px; margin-right: 0px">
+        @if (AuthService.IsAuthenticated())
+        {
+            var currentMember = GetCurrentMember();
+            @if (currentMember != null)
+            {
+                <MudStack Row="true" AlignItems="AlignItems.Center" Style="padding-right: 0px;">
+                    <MudAvatar Color="Color.Default"
+                    Style="background: linear-gradient(135deg, #FFD700 0%, #FFA500 100%); box-shadow: 0 0 20px rgba(255, 215, 0, 0.6), 0 0 40px rgba(255, 215, 0, 0.3);">
+                                <MudButton Typo="Typo.body1" OnClick="GoToMyself" Style="color: #1a1a1a; font-weight: 600;">@currentMember.Name[0]</MudButton>
+                    </MudAvatar>
+                    <MudBadge
+                    Content="@_takenGiftsCount"
+                    Visible="@(_takenGiftsCount > 0)"
+                    Color="Color.Success"
+                    Overlap="true"
+                    Class="position-relative d-inline-flex">
+                        <MudIconButton Icon="@Icons.Material.Filled.CardGiftcard"
+                        Color="Color.Primary"
+                        OnClick="OpenMyTakenGiftsDialog"
+                        title="Mine reserverte gaver" />
+                    </MudBadge>
+
+                    <MudBadge Content="@_secretSantaCount"
+                    Visible="@(_secretSantaCount > 0)"
+                    Color="Color.Error"
+                    Overlap="true">
+                        <MudIconButton Icon="@Icons.Material.Filled.Forest"
+                        Color="Color.Success"
+                        OnClick="OpenMySecretSantaDialog"
+                        Style="color: #dc3545;"
+                        title="Mine Hemmelige Nisser" />
+                    </MudBadge>
+                    <MudIconButton Variant="Variant.Text"
+                    Color="Color.Tertiary"
+                    OnClick="OpenCreateSecretSantaDialog"
+                    Icon="@Icons.Material.Filled.ConfirmationNumber">
+                    </MudIconButton>
+                    @if (currentMember.IsAdmin)
+                    {
+
+                        <MudIconButton Variant="Variant.Text"
+                        Color="Color.Inherit"
+                        OnClick="OpenAddMemberDialog"
+                        Icon="@Icons.Material.Filled.PersonAdd">
+                        </MudIconButton>
+                    }
+                </MudStack>
+
+            }
+            <MudButton Variant="Variant.Text"
+            Color="Color.Error"
+            OnClick="Logout"
+            StartIcon="@Icons.Material.Filled.Logout">
+                Logg ut
+            </MudButton>
+        }
     </MudAppBar>
 
     <MudMainContent>
         <MudContainer MaxWidth="MaxWidth.ExtraExtraLarge" Class="mt-4 mb-4">
-            @Body
+            <CascadingValue Value="this">
+                @Body
+            </CascadingValue>
         </MudContainer>
     </MudMainContent>
 </MudLayout>
@@ -23,14 +90,245 @@
 @code {
     private bool _isDarkMode = true;
     private bool _drawerOpen = false;
+    private ChristmasGiftCollection.Core.Models.Member? _cachedMember;
+    private bool _loginDialogShown = false;
+    private int _takenGiftsCount = 0;
+    private int _secretSantaCount = 0;
+    private Func<Task>? _onLoginCompletedCallback;
+
+    public event Action<Guid>? FamilyMemberChanged;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        Console.WriteLine($"[MainLayout] OnAfterRenderAsync - firstRender: {firstRender}, authenticated: {AuthService.IsAuthenticated()}, dialogShown: {_loginDialogShown}");
+
+        if (firstRender)
+        {
+            // Try to restore authentication from localStorage
+            await AuthService.InitializeFromStorageAsync(MemberService);
+
+            // If still not authenticated after trying to restore, show login dialog
+            if (!AuthService.IsAuthenticated() && !_loginDialogShown)
+            {
+                Console.WriteLine("[MainLayout] No stored session, showing login dialog");
+                _loginDialogShown = true;
+                await ShowLoginDialog();
+            }
+            else if (AuthService.IsAuthenticated())
+            {
+                Console.WriteLine("[MainLayout] Restored session from localStorage");
+                await LoadCurrentMemberAsync();
+            }
+        }
+        else if (!AuthService.IsAuthenticated() && !_loginDialogShown)
+        {
+            Console.WriteLine("[MainLayout] Showing login dialog from OnAfterRenderAsync");
+            _loginDialogShown = true;
+            await ShowLoginDialog();
+        }
+    }
 
     private void ToggleTheme()
     {
         _isDarkMode = !_isDarkMode;
     }
 
+    private void GoToMyself()
+    {
+        ShowMemberDetailsFromHome(AuthService.GetCurrentMemberId()!.Value);
+    }
+
     private void ToggleDrawer()
     {
         _drawerOpen = !_drawerOpen;
+    }
+
+    private ChristmasGiftCollection.Core.Models.Member? GetCurrentMember()
+    {
+        if (_cachedMember == null && AuthService.IsAuthenticated())
+        {
+            // Schedule async load but return null for now
+            _ = LoadCurrentMemberAsync();
+        }
+        return _cachedMember;
+    }
+
+    private async Task LoadCurrentMemberAsync()
+    {
+        if (_cachedMember == null && AuthService.IsAuthenticated())
+        {
+            _cachedMember = await AuthService.GetCurrentMemberAsync(MemberService);
+            await UpdateTakenGiftsCount();
+            await UpdateSecretSantaCount();
+            StateHasChanged();
+        }
+    }
+
+    private async Task UpdateTakenGiftsCount()
+    {
+        var currentMemberId = AuthService.GetCurrentMemberId();
+        if (currentMemberId.HasValue)
+        {
+            try
+            {
+                var takenGifts = await MemberService.GetGiftsTakenByMemberAsync(currentMemberId.Value);
+                _takenGiftsCount = takenGifts.Count;
+            }
+            catch
+            {
+                _takenGiftsCount = 0;
+            }
+        }
+        else
+        {
+            _takenGiftsCount = 0;
+        }
+    }
+
+    private async Task ShowLoginDialog()
+    {
+        var options = new DialogOptions
+        {
+            CloseButton = false,
+            MaxWidth = MaxWidth.Small,
+            FullWidth = true,
+            BackdropClick = false
+        };
+
+        var dialog = await DialogService.ShowAsync<LoginDialog>("Login", options);
+        Console.WriteLine("[MainLayout] Login dialog shown, waiting for result...");
+        var result = await dialog.Result;
+        Console.WriteLine($"[MainLayout] Dialog result - Canceled: {result.Canceled}, Authenticated: {AuthService.IsAuthenticated()}");
+
+        if (!result.Canceled && AuthService.IsAuthenticated())
+        {
+            Console.WriteLine("[MainLayout] User authenticated successfully, loading member");
+            _cachedMember = null;
+            _loginDialogShown = false;
+            await LoadCurrentMemberAsync();
+            Console.WriteLine("[MainLayout] Member loaded, triggering refresh");
+            StateHasChanged();
+
+            // Notify Home page to focus on the logged-in member
+            if (_onLoginCompletedCallback != null)
+            {
+                await _onLoginCompletedCallback.Invoke();
+            }
+        }
+        else if (!AuthService.IsAuthenticated() && !_loginDialogShown)
+        {
+            Console.WriteLine("[MainLayout] User not authenticated, showing dialog again");
+            // If user somehow closed dialog without authenticating, show it again
+            await ShowLoginDialog();
+        }
+    }
+
+    private async Task Logout()
+    {
+        await AuthService.LogoutAsync();
+        _cachedMember = null;
+        _loginDialogShown = false;
+        StateHasChanged();
+    }
+
+    private async Task OpenAddMemberDialog()
+    {
+        var options = new DialogOptions
+        {
+            CloseButton = false,
+            MaxWidth = MaxWidth.Small,
+            FullWidth = true,
+            BackdropClick = false
+        };
+
+        await DialogService.ShowAsync<AddMemberDialog>("Legg til familie medlem", options);
+    }
+
+    private async Task OpenMyTakenGiftsDialog()
+    {
+        var options = new DialogOptions
+        {
+            CloseButton = true,
+            MaxWidth = MaxWidth.Medium,
+            FullWidth = true
+        };
+
+        var dialog = await DialogService.ShowAsync<MyTakenGiftsDialog>("Reserverte gaver", options);
+        var result = await dialog.Result;
+
+        // Refresh count after dialog closes (in case user released any gifts)
+        if (!result.Canceled)
+        {
+            await UpdateTakenGiftsCount();
+            StateHasChanged();
+        }
+    }
+
+    public void RegisterLoginCompletedCallback(Func<Task> callback)
+    {
+        _onLoginCompletedCallback = callback;
+    }
+
+
+    private async Task UpdateSecretSantaCount()
+    {
+        var currentMemberId = AuthService.GetCurrentMemberId();
+        if (currentMemberId.HasValue)
+        {
+            try
+            {
+                var raffles = await SecretSantaService.GetRafflesForMemberAsync(currentMemberId.Value);
+                _secretSantaCount = raffles.Count();
+            }
+            catch
+            {
+                _secretSantaCount = 0;
+            }
+        }
+        else
+        {
+            _secretSantaCount = 0;
+        }
+    }
+
+    private async Task OpenMySecretSantaDialog()
+    {
+        var parameters = new DialogParameters<MySecretSantaDialog>
+        {
+            { x => x.OnViewMemberDetails, EventCallback.Factory.Create<Guid>(this, async (memberId) =>
+                {
+                    await ShowMemberDetailsFromHome(memberId);
+                })
+            }
+        };
+
+        var options = new DialogOptions
+        {
+            CloseButton = true,
+            MaxWidth = MaxWidth.Medium,
+            FullWidth = true
+        };
+
+        await DialogService.ShowAsync<MySecretSantaDialog>("Min Secret Santa", parameters, options);
+    }
+
+    private async Task ShowMemberDetailsFromHome(Guid memberId)
+    {
+        FamilyMemberChanged?.Invoke(memberId);
+    }
+
+    private async Task OpenCreateSecretSantaDialog()
+    {
+        var options = new DialogOptions
+        {
+            CloseButton = true,
+            MaxWidth = MaxWidth.Medium,
+            FullWidth = true
+        };
+
+        var result = await DialogService.ShowAsync<CreateSecretSantaDialog>("Create Secret Santa Raffle", options);
+
+        await UpdateSecretSantaCount();
+        StateHasChanged();
     }
 }

@@ -18,10 +18,12 @@
 
 <body>
     <Routes @rendermode="InteractiveServer" />
-    <script src="_framework/blazor.web.js"></script>
+    <script src="_framework/blazor.web.js" autostart="false"></script>
+    <script src="js/blazorConfig.js"></script>
     <script src="_content/MudBlazor/MudBlazor.min.js"></script>
     <script src="https://unpkg.com/vis-network@9.1.9/dist/vis-network.min.js"></script>
     <script src="_content/MudBlazor/MudBlazor.min.js?v=@(MudBlazor.Metadata.Version)"></script>
+    <script src="js/authStorage.js"></script>
 </body>
 
 </html>

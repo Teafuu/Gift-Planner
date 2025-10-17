@@ -65,3 +65,13 @@ public class GiftRemoved : GiftEvent
     public Guid MemberId { get; set; }
     public string Reason { get; set; } = string.Empty;
 }
+
+/// <summary>
+/// Event raised when gifts are reordered by the user
+/// </summary>
+public class GiftsReordered
+{
+    public Guid MemberId { get; set; }
+    public Dictionary<Guid, int> GiftOrders { get; set; } = new();
+    public DateTime Timestamp { get; set; } = DateTime.UtcNow;
+}

@@ -1,8 +1,10 @@
-@inject IJSRuntime JS
+﻿@inject IJSRuntime JS
 @using ChristmasGiftCollection.Core.Services
 @using ChristmasGiftCollection.Core.Models
+@using ChristmasGiftCollection.Web.Services
 @using Microsoft.JSInterop
 @inject IMemberService MemberService
+@inject IAuthenticationService AuthService
 @implements IAsyncDisposable
 
 <div id="family-graph" style="width: 100%; height: 100%;"></div>
@@ -28,6 +30,14 @@
         await InitializeGraphAsync();
     }
 
+    public async Task FocusOnCurrentMemberAsync(Guid memberId)
+    {
+        if (_module != null)
+        {
+            await _module.InvokeVoidAsync("focusOnMember", memberId.ToString());
+        }
+    }
+
     private async Task InitializeGraphAsync()
     {
         if (_module != null)
@@ -36,40 +46,253 @@
             {
                 // Load real data from event sourcing
                 var members = await MemberService.GetAllMembersAsync();
+                var currentMemberId = AuthService.GetCurrentMemberId();
                 var graphData = BuildGraphData(members);
-                await _module.InvokeVoidAsync("initializeGraph", "family-graph", graphData, _objRef);
+                await _module.InvokeVoidAsync("initializeGraph", "family-graph", graphData, _objRef, currentMemberId?.ToString());
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"Error initializing graph: {ex.Message}");
                 // Initialize with empty data on error
                 var emptyData = new { nodes = Array.Empty<object>(), edges = Array.Empty<object>() };
-                await _module.InvokeVoidAsync("initializeGraph", "family-graph", emptyData, _objRef);
+                await _module.InvokeVoidAsync("initializeGraph", "family-graph", emptyData, _objRef, null);
             }
         }
     }
 
     private object BuildGraphData(IEnumerable<Member> members)
     {
-        var nodes = members.Select(m => new
+        var membersList = members.ToList();
+        var memberDict = membersList.ToDictionary(m => m.Id);
+
+        var nodes = new List<Dictionary<string, object>>();
+        var edges = new List<Dictionary<string, object>>();
+
+        // Build data structures
+        var parentToChildren = new Dictionary<Guid, HashSet<Guid>>();
+        var couples = new Dictionary<Guid, Guid>();
+        var processedCouples = new HashSet<string>();
+
+        foreach (var m in membersList)
         {
-            id = m.Id.ToString(),
-            label = m.Name,
-            title = $"{m.Name}\nClick to view gifts and details",
-            giftCount = m.Gifts.Count
-        }).ToList();
-
-        var edges = members
-            .SelectMany(m => m.Relationships.Select(r => new
+            foreach (var r in m.Relationships)
             {
-                from = r.FromMemberId.ToString(),
-                to = r.ToMemberId.ToString(),
-                label = r.Type.ToString().Replace("Of", " of "),
-                arrows = "to"
-            }))
-            .ToList();
+                if (r.Type == RelationshipType.ParentOf)
+                {
+                    if (!parentToChildren.ContainsKey(r.FromMemberId))
+                        parentToChildren[r.FromMemberId] = new();
+                    parentToChildren[r.FromMemberId].Add(r.ToMemberId);
+                }
+                else if (r.Type == RelationshipType.PartnerOf)
+                {
+                    if (!couples.ContainsKey(r.FromMemberId))
+                        couples[r.FromMemberId] = r.ToMemberId;
+                    if (!couples.ContainsKey(r.ToMemberId))
+                        couples[r.ToMemberId] = r.FromMemberId;
+                }
+            }
+        }
 
+        // Color palette for variety
+        var colors = new[]
+        {
+            new { bg = "#66bb6a", border = "#388e3c" },  // Green
+            new { bg = "#ef5350", border = "#c62828" },  // Red
+            new { bg = "#42a5f5", border = "#1976d2" },  // Blue
+            new { bg = "#ab47bc", border = "#7b1fa2" },  // Purple
+            new { bg = "#ff9800", border = "#e65100" },  // Orange
+            new { bg = "#26c6da", border = "#00838f" },  // Cyan
+            new { bg = "#ec407a", border = "#ad1457" },  // Pink
+            new { bg = "#9ccc65", border = "#689f38" }   // Light Green
+        };
+
+        var colorIndex = 0;
+
+        // Get current user ID for highlighting
+        var currentUserId = AuthService.GetCurrentMemberId();
+
+        // Create person nodes with varied colors
+        foreach (var m in membersList)
+        {
+            var isCurrentUser = currentUserId.HasValue && m.Id == currentUserId.Value;
+
+            Dictionary<string, object> colorConfig;
+            object? shadowConfig = null;
+
+            if (isCurrentUser)
+            {
+                // Gold gradient with glow for current user
+                colorConfig = new Dictionary<string, object>
+                {
+                    ["background"] = "#FFD700",
+                    ["border"] = "#FFA500",
+                    ["highlight"] = new Dictionary<string, string>
+                    {
+                        ["background"] = "#FFE44D", // Lighter/brighter gold
+                        ["border"] = "#FFB84D"      // Lighter orange
+                    },
+                    ["hover"] = new Dictionary<string, string>
+                    {
+                        ["background"] = "#FFE44D",
+                        ["border"] = "#FFB84D"
+                    }
+                };
+                shadowConfig = new
+                {
+                    enabled = true,
+                    color = "rgba(255, 215, 0, 0.8)",
+                    size = 25,
+                    x = 0,
+                    y = 0
+                };
+            }
+            else
+            {
+                var color = colors[colorIndex % colors.Length];
+                colorIndex++;
+                colorConfig = new Dictionary<string, object>
+                {
+                    ["background"] = color.bg,
+                    ["border"] = color.border,
+                    ["highlight"] = new Dictionary<string, string>
+                    {
+                        ["background"] = LightenHexColor(color.bg, 30),
+                        ["border"] = LightenHexColor(color.border, 30)
+                    },
+                    ["hover"] = new Dictionary<string, string>
+                    {
+                        ["background"] = LightenHexColor(color.bg, 30),
+                        ["border"] = LightenHexColor(color.border, 30)
+                    }
+                };
+            }
+
+            var node = new Dictionary<string, object>
+            {
+                ["id"] = m.Id.ToString(),
+                ["label"] = m.Name,
+                ["shape"] = "box",
+                ["color"] = colorConfig,
+                ["size"] = 25,
+                ["mass"] = 2,
+                ["font"] = new { color = isCurrentUser ? "#1a1a1a" : "#ffffff", bold = isCurrentUser }
+            };
+
+            if (shadowConfig != null)
+            {
+                node["shadow"] = shadowConfig;
+            }
+
+            nodes.Add(node);
+        }
+
+        // Create couple connector nodes and edges
+        foreach (var (p1, p2) in couples)
+        {
+            var coupleKey = p1 < p2 ? $"{p1}-{p2}" : $"{p2}-{p1}";
+
+            if (!processedCouples.Contains(coupleKey))
+            {
+                processedCouples.Add(coupleKey);
+                var coupleNodeId = $"couple-{coupleKey}";
+
+                // Create small connector node between couple
+                nodes.Add(new Dictionary<string, object>
+                {
+                    ["id"] = coupleNodeId,
+                    ["label"] = "",
+                    ["shape"] = "dot",
+                    ["size"] = 8,
+                    ["color"] = new { background = "#FFD700", border = "#FFD700" },
+                    ["mass"] = 3,
+                    ["physics"] = true
+                });
+
+                // Connect couple members to connector (short edges to keep them close)
+                edges.Add(new Dictionary<string, object>
+                {
+                    ["id"] = $"couple-edge1-{coupleKey}",
+                    ["from"] = p1.ToString(),
+                    ["to"] = coupleNodeId,
+                    ["color"] = new { color = "#FFD700" },
+                    ["width"] = 5,
+                    ["length"] = 40,  // Shorter length
+                    ["smooth"] = false
+                });
+
+                edges.Add(new Dictionary<string, object>
+                {
+                    ["id"] = $"couple-edge2-{coupleKey}",
+                    ["from"] = p2.ToString(),
+                    ["to"] = coupleNodeId,
+                    ["color"] = new { color = "#FFD700" },
+                    ["width"] = 5,
+                    ["length"] = 40,  // Shorter length
+                    ["smooth"] = false
+                });
+
+                // Find children of this couple and connect them to the connector
+                var coupleChildren = new HashSet<Guid>();
+                if (parentToChildren.TryGetValue(p1, out var p1Children))
+                    foreach (var c in p1Children) coupleChildren.Add(c);
+                if (parentToChildren.TryGetValue(p2, out var p2Children))
+                    foreach (var c in p2Children) coupleChildren.Add(c);
+
+                foreach (var childId in coupleChildren)
+                {
+                    edges.Add(new Dictionary<string, object>
+                    {
+                        ["id"] = $"parent-child-{coupleNodeId}-{childId}",
+                        ["from"] = coupleNodeId,
+                        ["to"] = childId.ToString(),
+                        ["arrows"] = "to",
+                        ["color"] = new { color = "#2196F3" },
+                        ["width"] = 2,
+                        ["smooth"] = new { type = "curvedCW", roundness = 0.2 }
+                    });
+                }
+            }
+        }
+
+        // Add edges for single parents (no spouse/partner)
+        foreach (var (parent, children) in parentToChildren)
+        {
+            if (!couples.ContainsKey(parent))
+            {
+                foreach (var childId in children)
+                {
+                    edges.Add(new Dictionary<string, object>
+                    {
+                        ["id"] = $"parent-child-{parent}-{childId}",
+                        ["from"] = parent.ToString(),
+                        ["to"] = childId.ToString(),
+                        ["arrows"] = "to",
+                        ["color"] = new { color = "#2196F3" },
+                        ["width"] = 2,
+                        ["smooth"] = new { type = "curvedCW", roundness = 0.2 }
+                    });
+                }
+            }
+        }
         return new { nodes, edges };
+    }
+
+    private static string LightenHexColor(string hex, int percent)
+    {
+        // Remove # if present
+        hex = hex.TrimStart('#');
+
+        // Parse RGB
+        int r = Convert.ToInt32(hex.Substring(0, 2), 16);
+        int g = Convert.ToInt32(hex.Substring(2, 2), 16);
+        int b = Convert.ToInt32(hex.Substring(4, 2), 16);
+
+        // Lighten by moving toward 255
+        r = Math.Min(255, r + (int)((255 - r) * percent / 100.0));
+        g = Math.Min(255, g + (int)((255 - g) * percent / 100.0));
+        b = Math.Min(255, b + (int)((255 - b) * percent / 100.0));
+
+        return $"#{r:X2}{g:X2}{b:X2}";
     }
 
     [JSInvokable]

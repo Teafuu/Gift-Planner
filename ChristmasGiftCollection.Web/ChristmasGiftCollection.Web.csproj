@@ -1,23 +1,24 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
 
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>net9.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\ChristmasGiftCollection.ServiceDefaults\ChristmasGiftCollection.ServiceDefaults.csproj" />
     <ProjectReference Include="..\ChristmasGiftCollection.Core\ChristmasGiftCollection.Core.csproj" />
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Akka" Version="1.5.53" />
+    <PackageReference Include="Akka" Version="1.5.54" />
     <PackageReference Include="Akka.Hosting" Version="1.5.53" />
-    <PackageReference Include="EventStore.Client.Grpc.Streams" Version="23.3.9" />
+    <PackageReference Include="Azure.Identity" Version="1.17.0" />
+    <PackageReference Include="BCrypt.Net-Next" Version="4.0.3" />
+    <PackageReference Include="Microsoft.Azure.Cosmos" Version="3.55.0-preview.0" />
     <PackageReference Include="MudBlazor" Version="8.13.0" />
     <PackageReference Include="Serilog.AspNetCore" Version="9.0.0" />
-    <PackageReference Include="Serilog.Sinks.Console" Version="6.0.0" />
+    <PackageReference Include="Serilog.Sinks.Console" Version="6.0.1-dev-00953" />
   </ItemGroup>
 
 </Project>

@@ -6,39 +6,82 @@
 @rendermode InteractiveServer
 
 <MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">Legg til gaveønske</MudText>
+    </TitleContent>
     <DialogContent>
         <MudTextField @bind-Value="_name"
-                      Label="Gift Name"
+                      Label="Gavenavn"
                       Required="true"
                       Variant="Variant.Outlined"
-                      Margin="Margin.Dense" />
+                      Margin="Margin.Dense"
+                      Class="mb-4"
+                      AutoFocus="true"
+                      HelperText="Hva kunne du tenke deg?" />
 
         <MudTextField @bind-Value="_description"
-                      Label="Description (Optional)"
+                      Label="Beskrivelse (Valgfritt)"
                       Lines="3"
                       Variant="Variant.Outlined"
                       Margin="Margin.Dense"
-                      Class="mt-3" />
+                      Class="mb-4"
+                      HelperText="Detaljer, lenker, notater..." />
 
-        <MudSelect @bind-Value="_priority"
-                   Label="Priority"
-                   Variant="Variant.Outlined"
-                   Margin="Margin.Dense"
-                   Class="mt-3">
-            <MudSelectItem Value="@GiftPriority.Low">Low</MudSelectItem>
-            <MudSelectItem Value="@GiftPriority.Medium">Medium</MudSelectItem>
-            <MudSelectItem Value="@GiftPriority.High">High</MudSelectItem>
-        </MudSelect>
+        <MudText Typo="Typo.subtitle2" Class="mb-2">Prioritet</MudText>
+        <MudChipSet T="GiftPriority"
+                    @bind-SelectedValue="_selectedPriority"
+                    Filter="true"
+                    Mandatory="true"
+                    Class="mb-4">
+            <MudChip T="GiftPriority"
+                     Value="@GiftPriority.Low"
+                     Color="Color.Default"
+                     SelectedColor="Color.Success"
+                     Text="Lav"
+                     Icon="@Icons.Material.Filled.Remove">
+                Lav
+            </MudChip>
+            <MudChip T="GiftPriority"
+                     Value="@GiftPriority.Medium"
+                     Color="Color.Default"
+                     SelectedColor="Color.Warning"
+                     Text="Middels"
+                     Icon="@Icons.Material.Filled.DragHandle"
+                     Default="true">
+                Middels
+            </MudChip>
+            <MudChip T="GiftPriority"
+                     Value="@GiftPriority.High"
+                     Color="Color.Default"
+                     SelectedColor="Color.Error"
+                     Text="Høy"
+                     Icon="@Icons.Material.Filled.PriorityHigh">
+                Høy
+            </MudChip>
+        </MudChipSet>
+
+        <div class="d-flex gap-2 mt-4">
+            <MudButton Variant="Variant.Outlined"
+                       Color="Color.Default"
+                       FullWidth="true"
+                       Size="Size.Large"
+                       OnClick="Cancel">
+                Avbryt
+            </MudButton>
+            <MudButton Variant="Variant.Filled"
+                       Color="Color.Success"
+                       FullWidth="true"
+                       Size="Size.Large"
+                       OnClick="Submit"
+                       Disabled="@_isProcessing">
+                @if (_isProcessing)
+                {
+                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                }
+                Legg til gave
+            </MudButton>
+        </div>
     </DialogContent>
-    <DialogActions>
-        <MudButton OnClick="Cancel">Cancel</MudButton>
-        <MudButton Color="Color.Primary"
-                   Variant="Variant.Filled"
-                   OnClick="Submit"
-                   Disabled="@(string.IsNullOrWhiteSpace(_name))">
-            Add Gift
-        </MudButton>
-    </DialogActions>
 </MudDialog>
 
 @code {
@@ -47,20 +90,31 @@
 
     private string _name = string.Empty;
     private string? _description;
-    private GiftPriority _priority = GiftPriority.Medium;
+    private GiftPriority _selectedPriority = GiftPriority.Medium;
+    private bool _isProcessing = false;
 
     private async Task Submit()
     {
+        if (_isProcessing)
+            return;
+
+        _isProcessing = true;
+
         try
         {
-            await MemberService.AddGiftAsync(MemberId, _name, _description, _priority);
+            var giftName = string.IsNullOrWhiteSpace(_name) ? "Uten navn" : _name.Trim();
+            await MemberService.AddGiftAsync(MemberId, giftName, _description?.Trim(), _selectedPriority);
 
-            Snackbar.Add($"Gift '{_name}' added successfully!", Severity.Success);
+            Snackbar.Add($"Gave '{giftName}' lagt til!", Severity.Success);
             MudDialog.Close(DialogResult.Ok(true));
         }
         catch (Exception ex)
         {
-            Snackbar.Add($"Error adding gift: {ex.Message}", Severity.Error);
+            Snackbar.Add($"Feil ved tillegging av gave: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isProcessing = false;
         }
     }
 

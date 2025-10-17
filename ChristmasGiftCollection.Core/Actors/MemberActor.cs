@@ -299,6 +299,44 @@ public class MemberActor : ReceiveActor, IWithStash
             Sender.Tell(new Success { Message = "Relationship removed successfully" });
         });
 
+        // Handle SetPinCode command
+        Receive<SetPinCode>(cmd =>
+        {
+            if (_state.Id == Guid.Empty || _state.IsDeleted)
+            {
+                Sender.Tell(new CommandFailure { Exception = new InvalidOperationException($"Member {_memberId} not found") });
+                return;
+            }
+
+            var evt = new MemberPinCodeSet
+            {
+                MemberId = cmd.MemberId,
+                PinCode = cmd.PinCode
+            };
+
+            PersistEvent(evt);
+            Sender.Tell(new Success { Message = "PIN code set successfully" });
+        });
+
+        // Handle ReorderGifts command
+        Receive<ReorderGifts>(cmd =>
+        {
+            if (_state.Id == Guid.Empty || _state.IsDeleted)
+            {
+                Sender.Tell(new CommandFailure { Exception = new InvalidOperationException($"Member {_memberId} not found") });
+                return;
+            }
+
+            var evt = new GiftsReordered
+            {
+                MemberId = cmd.MemberId,
+                GiftOrders = cmd.GiftOrders
+            };
+
+            PersistEvent(evt);
+            Sender.Tell(new Success { Message = "Gifts reordered successfully" });
+        });
+
         // Handle GetMemberState query
         Receive<GetMemberState>(_ =>
         {
@@ -363,6 +401,9 @@ public class MemberActor : ReceiveActor, IWithStash
             case GiftRemoved e:
                 _state.Apply(e);
                 break;
+            case GiftsReordered e:
+                _state.Apply(e);
+                break;
             case RelationshipAdded e:
                 _state.Apply(e);
                 break;
@@ -370,6 +411,9 @@ public class MemberActor : ReceiveActor, IWithStash
                 _state.Apply(e);
                 break;
             case RelationshipRemoved e:
+                _state.Apply(e);
+                break;
+            case MemberPinCodeSet e:
                 _state.Apply(e);
                 break;
         }

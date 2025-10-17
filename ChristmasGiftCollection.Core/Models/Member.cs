@@ -15,6 +15,20 @@ public class Member
     /// </summary>
     public string Name { get; set; } = string.Empty;
 
+    /// <summary>
+    /// Date of birth of the family member
+    /// </summary>
+    public DateTime? DateOfBirth { get; set; }
+
+    /// <summary>
+    /// 4-digit PIN code for member authentication (plain text)
+    /// </summary>
+    public string? PinCode { get; set; }
+
+    /// <summary>
+    /// Whether this member has administrative privileges
+    /// </summary>
+    public bool IsAdmin { get; set; }
 
     /// <summary>
     /// List of gift ideas associated with this member

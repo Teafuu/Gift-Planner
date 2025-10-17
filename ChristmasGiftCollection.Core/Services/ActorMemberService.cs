@@ -178,6 +178,32 @@ public class ActorMemberService(ActorSystem actorSystem) : IMemberService
         }
     }
 
+    public async Task ReorderGiftsAsync(Guid memberId, Dictionary<Guid, int> giftOrders, CancellationToken cancellationToken = default)
+    {
+        var supervisor = GetSupervisor();
+
+        var command = new ReorderGifts(memberId, giftOrders);
+        var result = await supervisor.Ask<object>(command, _timeout);
+
+        if (result is CommandFailure failure)
+        {
+            throw failure.Exception;
+        }
+    }
+
+    public async Task RemoveGiftAsync(Guid memberId, Guid giftId, CancellationToken cancellationToken = default)
+    {
+        var supervisor = GetSupervisor();
+
+        var command = new RemoveGift(memberId, giftId, "Deleted by owner");
+        var result = await supervisor.Ask<object>(command, _timeout);
+
+        if (result is CommandFailure failure)
+        {
+            throw failure.Exception;
+        }
+    }
+
     public async Task AddRelationshipAsync(Guid fromMemberId, Guid toMemberId, RelationshipType type, CancellationToken cancellationToken = default)
     {
         var supervisor = GetSupervisor();
@@ -190,6 +216,134 @@ public class ActorMemberService(ActorSystem actorSystem) : IMemberService
         {
             throw failure.Exception;
         }
+
+        // If PartnerOf, automatically create the reverse relationship so it's bidirectional
+        if (type == RelationshipType.PartnerOf)
+        {
+            var reverseRelationshipId = Guid.NewGuid();
+            var reverseCommand = new AddRelationship(toMemberId, reverseRelationshipId, fromMemberId, RelationshipType.PartnerOf);
+            var reverseResult = await supervisor.Ask<object>(reverseCommand, _timeout);
+
+            if (reverseResult is CommandFailure reverseFailure)
+            {
+                throw reverseFailure.Exception;
+            }
+        }
+    }
+
+    public async Task RemoveRelationshipAsync(Guid fromMemberId, Guid relationshipId, Guid toMemberId, CancellationToken cancellationToken = default)
+    {
+        var supervisor = GetSupervisor();
+
+        // Get the relationship type before removing it
+        var fromMember = await GetMemberByIdAsync(fromMemberId, cancellationToken);
+        var relationship = fromMember?.Relationships.FirstOrDefault(r => r.Id == relationshipId);
+
+        var command = new RemoveRelationship(fromMemberId, relationshipId, toMemberId);
+        var result = await supervisor.Ask<object>(command, _timeout);
+
+        if (result is CommandFailure failure)
+        {
+            throw failure.Exception;
+        }
+
+        // If it was a PartnerOf relationship, also remove the reverse relationship
+        if (relationship?.Type == RelationshipType.PartnerOf)
+        {
+            var toMember = await GetMemberByIdAsync(toMemberId, cancellationToken);
+            var reverseRelationship = toMember?.Relationships.FirstOrDefault(r =>
+                r.Type == RelationshipType.PartnerOf && r.ToMemberId == fromMemberId);
+
+            if (reverseRelationship != null)
+            {
+                var reverseCommand = new RemoveRelationship(toMemberId, reverseRelationship.Id, fromMemberId);
+                var reverseResult = await supervisor.Ask<object>(reverseCommand, _timeout);
+
+                if (reverseResult is CommandFailure reverseFailure)
+                {
+                    throw reverseFailure.Exception;
+                }
+            }
+        }
+    }
+
+    public async Task<bool> CanEditGiftsAsync(Guid currentMemberId, Guid targetMemberId, CancellationToken cancellationToken = default)
+    {
+        // Same member can always edit their own gifts
+        if (currentMemberId == targetMemberId)
+            return true;
+
+        // Get current member to check if admin
+        var currentMember = await GetMemberByIdAsync(currentMemberId, cancellationToken);
+        if (currentMember?.IsAdmin == true)
+            return true;
+
+        // Check if target is a descendant (child, grandchild, etc.) using ONLY ParentOf relationships
+        var descendants = await GetAllDescendantsAsync(currentMemberId, cancellationToken);
+        return descendants.Contains(targetMemberId);
+    }
+
+    public async Task<List<Guid>> GetAllDescendantsAsync(Guid memberId, CancellationToken cancellationToken = default)
+    {
+        // Load all members once to avoid N database calls
+        var allMembers = (await GetAllMembersAsync(cancellationToken)).ToList();
+        var memberLookup = allMembers.ToDictionary(m => m.Id);
+
+        var descendants = new HashSet<Guid>();
+        var toProcess = new Queue<Guid>();
+        toProcess.Enqueue(memberId);
+
+        // Breadth-first search through ParentOf relationships
+        while (toProcess.Count > 0)
+        {
+            var currentId = toProcess.Dequeue();
+
+            // Look up member in memory instead of hitting database
+            if (!memberLookup.TryGetValue(currentId, out var member))
+                continue;
+
+            // Only look at ParentOf relationships (ignore ChildOf to avoid duplication)
+            foreach (var rel in member.Relationships.Where(r => r.Type == RelationshipType.ParentOf))
+            {
+                if (!descendants.Contains(rel.ToMemberId))
+                {
+                    descendants.Add(rel.ToMemberId);
+                    toProcess.Enqueue(rel.ToMemberId); // Recursively check this child's children
+                }
+            }
+        }
+
+        return descendants.ToList();
+    }
+
+    public async Task SetPinCodeAsync(Guid memberId, string pinCode, CancellationToken cancellationToken = default)
+    {
+        var supervisor = GetSupervisor();
+
+        var command = new SetPinCode(memberId, pinCode);
+        var result = await supervisor.Ask<object>(command, _timeout);
+
+        if (result is CommandFailure failure)
+        {
+            throw failure.Exception;
+        }
+    }
+
+    public async Task<List<(Gift gift, Member owner)>> GetGiftsTakenByMemberAsync(Guid takenByMemberId, CancellationToken cancellationToken = default)
+    {
+        var allMembers = await GetAllMembersAsync(cancellationToken);
+        var takenGifts = new List<(Gift gift, Member owner)>();
+
+        foreach (var member in allMembers)
+        {
+            var giftsFromThisMember = member.Gifts
+                .Where(g => g.TakenByMemberId == takenByMemberId && g.Status == GiftStatus.Taken)
+                .Select(g => (gift: g, owner: member));
+
+            takenGifts.AddRange(giftsFromThisMember);
+        }
+
+        return takenGifts;
     }
 }
 

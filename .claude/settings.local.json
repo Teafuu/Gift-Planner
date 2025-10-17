@@ -4,7 +4,16 @@
       "Bash(dotnet build:*)",
       "Bash(dotnet test:*)",
       "Bash(dotnet add:*)",
-      "Bash(dotnet remove:*)"
+      "Bash(dotnet remove:*)",
+      "Bash(if exist eventstore-data-gift rmdir /s /q eventstore-data-gift)",
+      "Bash(if exist eventstore-data-gift-collection rmdir /s /q eventstore-data-gift-collection)",
+      "Bash(if exist eventstore-logs rmdir /s /q eventstore-logs)",
+      "Bash(if exist eventstore-data rmdir /s /q eventstore-data)",
+      "Bash(az cosmosdb list --query \"[].{name:name, resourceGroup:resourceGroup, disableLocalAuth:disableLocalAuth}\" -o table)",
+      "Bash(az webapp list --query \"[].{name:name, resourceGroup:resourceGroup}\" -o table)",
+      "Bash(az resource list --resource-type \"Microsoft.App/containerApps\" --query \"[].{name:name, resourceGroup:resourceGroup, location:location}\" -o table)",
+      "Bash(az containerapp identity show --name christmasgiftcollectionweb-app-2 --resource-group rg-prod)",
+      "Bash(az cosmosdb sql role assignment list --account-name cosmosdb-hapmzcec7olfy --resource-group rg-prod -o table)"
     ],
     "deny": [],
     "ask": []

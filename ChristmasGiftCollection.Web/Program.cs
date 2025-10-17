@@ -1,9 +1,12 @@
 using Akka.Actor;
 using Akka.DependencyInjection;
+using Azure.Core;
+using Azure.Identity;
 using ChristmasGiftCollection.Core.Actors;
 using ChristmasGiftCollection.Core.Repositories;
 using ChristmasGiftCollection.Web.Components;
-using EventStore.Client;
+using ChristmasGiftCollection.Web.Infrastructure;
+using Microsoft.Azure.Cosmos;
 using MudBlazor.Services;
 using Serilog;
 
@@ -20,19 +23,55 @@ builder.Host.UseSerilog((context, configuration) =>
         .MinimumLevel.Override("Akka", Serilog.Events.LogEventLevel.Information);
 });
 
-builder.AddServiceDefaults();
-
-// Configure EventStore client
-var eventstoreConnectionString = builder.Configuration.GetConnectionString("eventstore")
-    ?? "esdb://eventstore:2113?tls=false"; // fallback for Aspire network
+// Configure direct CosmosClient with Azure AD authentication
+var cosmosEndpoint = builder.Configuration.GetConnectionString("cosmosdb")
+    ?? "https://cosmosdb-hapmzcec7olfy.documents.azure.com:443/";
 
 builder.Services.AddSingleton(sp =>
 {
-    var settings = EventStoreClientSettings.Create(eventstoreConnectionString);
-    return new EventStoreClient(settings);
+    var logger = sp.GetRequiredService<ILogger<Program>>();
+
+    var credentialOptions = new DefaultAzureCredentialOptions
+    {
+        ExcludeVisualStudioCredential = true,
+        ExcludeVisualStudioCodeCredential = true,
+        ExcludeAzureCliCredential = false, // Keep this for local development
+        ExcludeManagedIdentityCredential = false, // This is needed for Azure
+        Diagnostics = { IsLoggingEnabled = true }
+    };
+
+    var credential = new DefaultAzureCredential(credentialOptions);
+
+    var options = new CosmosClientOptions
+    {
+        Serializer = new CosmosSystemTextJsonSerializer(
+            new System.Text.Json.JsonSerializerOptions
+            {
+                PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase,
+                DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
+            })
+    };
+
+    try
+    {
+        logger.LogInformation("Attempting to connect to Cosmos DB at {Endpoint}", cosmosEndpoint);
+        var client = new CosmosClient(cosmosEndpoint, credential, options);
+        logger.LogInformation("Successfully created Cosmos DB client");
+        return client;
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "Failed to create Cosmos DB client");
+        throw;
+    }
 });
-// Register EventStore repository
-builder.Services.AddSingleton<IEventStoreRepository, EventStoreRepository>();
+
+// Register Cosmos DB repository (initialization will happen lazily)
+builder.Services.AddSingleton<IEventStoreRepository, CosmosDbEventStoreRepository>();
+
+// Add authentication services (Scoped for per-circuit authentication - each user gets their own instance)
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<ChristmasGiftCollection.Web.Services.IAuthenticationService, ChristmasGiftCollection.Web.Services.AuthenticationService>();
 
 // Add services to the container.
 builder.Services.AddRazorComponents()
@@ -52,7 +91,10 @@ builder.Services.AddSingleton(sp =>
 
     // Create the MemberActorSupervisor
     var eventStore = sp.GetRequiredService<IEventStoreRepository>();
-    var supervisor = actorSystem.ActorOf(MemberActorSupervisor.Props(eventStore), "member-supervisor");
+    var memberSupervisor = actorSystem.ActorOf(MemberActorSupervisor.Props(eventStore), "member-supervisor");
+
+    // Create the SecretSantaSupervisor
+    var secretSantaSupervisor = actorSystem.ActorOf(SecretSantaSupervisor.Props(eventStore), "secretsanta-supervisor");
 
     return actorSystem;
 });
@@ -66,6 +108,7 @@ builder.Services.AddSingleton(sp =>
 
 // Register services - using actor-based service for event sourcing
 builder.Services.AddScoped<ChristmasGiftCollection.Core.Services.IMemberService, ChristmasGiftCollection.Core.Services.ActorMemberService>();
+builder.Services.AddScoped<ChristmasGiftCollection.Core.Services.ISecretSantaService, ChristmasGiftCollection.Core.Services.ActorSecretSantaService>();
 
 builder.Services.AddOutputCache();
 
@@ -88,8 +131,6 @@ app.UseStaticFiles();
 
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
-
-app.MapDefaultEndpoints();
 
 // Ensure Akka.NET actor system shuts down gracefully
 var lifetime = app.Services.GetRequiredService<IHostApplicationLifetime>();

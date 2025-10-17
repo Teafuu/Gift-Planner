@@ -66,6 +66,11 @@ public class Gift
     public GiftPriority Priority { get; set; }
 
     /// <summary>
+    /// Display order for this gift (lower numbers appear first)
+    /// </summary>
+    public int Order { get; set; }
+
+    /// <summary>
     /// When this gift was created
     /// </summary>
     public DateTime CreatedAt { get; set; }

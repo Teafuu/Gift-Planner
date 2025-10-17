@@ -15,7 +15,7 @@ public class RelationshipTests
         relationship.Id.Should().BeEmpty();
         relationship.FromMemberId.Should().BeEmpty();
         relationship.ToMemberId.Should().BeEmpty();
-        relationship.Type.Should().Be(RelationshipType.ChildOf);
+        relationship.Type.Should().Be(RelationshipType.ParentOf);
         relationship.FromMember.Should().BeNull();
         relationship.ToMember.Should().BeNull();
     }
@@ -50,7 +50,7 @@ public class RelationshipTests
 
     [Theory]
     [InlineData(RelationshipType.PartnerOf)]
-    [InlineData(RelationshipType.ChildOf)]
+    [InlineData(RelationshipType.ParentOf)]
     public void Relationship_ShouldSupportAllRelationshipTypes(RelationshipType type)
     {
         // Arrange & Act
@@ -72,13 +72,13 @@ public class RelationshipTests
         {
             FromMemberId = parentId,
             ToMemberId = childId,
-            Type = RelationshipType.ChildOf
+            Type = RelationshipType.ParentOf
         };
 
         // Assert
         relationship.FromMemberId.Should().Be(parentId);
         relationship.ToMemberId.Should().Be(childId);
-        relationship.Type.Should().Be(RelationshipType.ChildOf);
+        relationship.Type.Should().Be(RelationshipType.ParentOf);
     }
 
     [Fact]
@@ -157,7 +157,7 @@ public class RelationshipTests
         {
             FromMemberId = member2Id,
             ToMemberId = member1Id,
-            Type = RelationshipType.ChildOf
+            Type = RelationshipType.ParentOf
         };
 
         // Assert
@@ -167,6 +167,6 @@ public class RelationshipTests
 
         relationship2.FromMemberId.Should().Be(member2Id);
         relationship2.ToMemberId.Should().Be(member1Id);
-        relationship2.Type.Should().Be(RelationshipType.ChildOf);
+        relationship2.Type.Should().Be(RelationshipType.ParentOf);
     }
 }

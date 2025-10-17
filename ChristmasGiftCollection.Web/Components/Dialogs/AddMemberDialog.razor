@@ -1,81 +1,66 @@
 @using ChristmasGiftCollection.Core.Models
 @using ChristmasGiftCollection.Core.Services
+@using ChristmasGiftCollection.Web.Services
 @using MudBlazor
 @inject IMemberService MemberService
+@inject IAuthenticationService AuthService
 @inject ISnackbar Snackbar
 @rendermode InteractiveServer
 
 <MudDialog>
     <DialogContent>
+        <MudText Typo="Typo.h6" Class="mb-2">Legg til deg selv</MudText>
+        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
+            Opprett profilen din for å bli med i familien
+        </MudText>
+
+        @if (!string.IsNullOrEmpty(_errorMessage))
+        {
+            <MudAlert Severity="Severity.Error" Class="mb-3">@_errorMessage</MudAlert>
+        }
+
         <MudTextField @bind-Value="_name"
-        Label="Name"
-        Required="true"
-        Variant="Variant.Outlined"
-        Margin="Margin.Dense" />
+                      Label="Ditt navn"
+                      Required="true"
+                      AutoFocus="true"
+                      Variant="Variant.Outlined"
+                      Margin="Margin.Dense"
+                      HelperText="Skriv inn ditt fulle navn"
+                      Class="mb-3" />
 
         <MudDatePicker @bind-Date="_dateOfBirth"
-        Label="Date of Birth (Optional)"
-        Variant="Variant.Outlined"
-        Margin="Margin.Dense"
-        Class="mt-3" />
+                       Label="Fødselsdato (Valgfritt)"
+                       Variant="Variant.Outlined"
+                       Margin="Margin.Dense"
+                       MaxDate="DateTime.Today"
+                       Class="mb-3" />
 
-        @if (_allMembers.Any())
-        {
-            <MudText Typo="Typo.subtitle2" Class="mt-4 mb-2">Relationships (Optional)</MudText>
-            @foreach (var rel in _relationships)
-            {
-                <MudPaper Class="pa-2 mb-2" Elevation="1">
-                    <MudGrid>
-                        <MudItem xs="5">
-                            <MudSelect @bind-Value="rel.ToMemberId"
-                            Label="To Member"
-                            Variant="Variant.Outlined"
-                            Margin="Margin.Dense"
-                            Dense="true">
-                                @foreach (var member in _allMembers)
-                                {
-                                    <MudSelectItem Value="@member.Id">@member.Name</MudSelectItem>
-                                }
-                            </MudSelect>
-                        </MudItem>
-                        <MudItem xs="5">
-                            <MudSelect @bind-Value="rel.Type"
-                            Label="Relationship"
-                            Variant="Variant.Outlined"
-                            Margin="Margin.Dense"
-                            Dense="true">
-                                <MudSelectItem Value="@RelationshipType.ChildOf">Child of</MudSelectItem>
-                                <MudSelectItem Value="@RelationshipType.PartnerOf">Partner of</MudSelectItem>
-                            </MudSelect>
-                        </MudItem>
-                        <MudItem xs="2" Class="d-flex align-center">
-                            <MudIconButton Icon="@Icons.Material.Filled.Delete"
-                            Color="Color.Error"
-                            Size="Size.Small"
-                            OnClick="@(() => _relationships.Remove(rel))" />
-                        </MudItem>
-                    </MudGrid>
-                </MudPaper>
-            }
+        <MudAlert Severity="Severity.Info" Class="mb-3">
+            Du vil angi din 4-sifrede PIN når du logger inn første gang
+        </MudAlert>
 
-            <MudButton StartIcon="@Icons.Material.Filled.Add"
-            Color="Color.Primary"
-            Variant="Variant.Text"
-            OnClick="AddRelationship"
-            Class="mt-2">
-                Add Relationship
+        <div class="d-flex gap-2">
+            <MudButton Variant="Variant.Outlined"
+                       Color="Color.Default"
+                       FullWidth="true"
+                       Size="Size.Large"
+                       OnClick="Cancel">
+                Tilbake
             </MudButton>
-        }
+            <MudButton Variant="Variant.Filled"
+                       Color="Color.Success"
+                       FullWidth="true"
+                       Size="Size.Large"
+                       OnClick="Submit"
+                       Disabled="@(string.IsNullOrWhiteSpace(_name) || _isProcessing)">
+                @if (_isProcessing)
+                {
+                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                }
+                Legg meg til
+            </MudButton>
+        </div>
     </DialogContent>
-    <DialogActions>
-        <MudButton OnClick="Cancel">Cancel</MudButton>
-        <MudButton Color="Color.Primary"
-        Variant="Variant.Filled"
-        OnClick="Submit"
-        Disabled="@(string.IsNullOrWhiteSpace(_name))">
-            Add Member
-        </MudButton>
-    </DialogActions>
 </MudDialog>
 
 @code {
@@ -83,48 +68,39 @@
 
     private string _name = string.Empty;
     private DateTime? _dateOfBirth;
-    private List<Member> _allMembers = new();
-    private List<RelationshipInput> _relationships = new();
-
-    protected override async Task OnInitializedAsync()
-    {
-        _allMembers = (await MemberService.GetAllMembersAsync()).ToList();
-    }
-
-    private void AddRelationship()
-    {
-        _relationships.Add(new RelationshipInput());
-    }
+    private string _errorMessage = "";
+    private bool _isProcessing = false;
 
     private async Task Submit()
     {
+        if (string.IsNullOrWhiteSpace(_name) || _isProcessing)
+            return;
+
+        _isProcessing = true;
+        _errorMessage = "";
+        StateHasChanged();
+
         try
         {
+            // Create the new member (they'll set PIN on first login)
             var member = await MemberService.CreateMemberAsync(
-                name: _name,
-                email: null,
-                dateOfBirth: _dateOfBirth,
-                notes: null
+                name: _name.Trim(),
+                dateOfBirth: _dateOfBirth
             );
 
-            foreach(var relationship in _relationships){
-                await MemberService.AddRelationshipAsync(member.Id, relationship.ToMemberId, relationship.Type);
-            }
-
-            Snackbar.Add($"Member '{_name}' added successfully!", Severity.Success);
+            Snackbar.Add($"{member.Name} har blitt lagt til i familien!", Severity.Success);
             MudDialog.Close(DialogResult.Ok(member));
         }
         catch (Exception ex)
         {
-            Snackbar.Add($"Error adding member: {ex.Message}", Severity.Error);
+            _errorMessage = $"Feil ved oppretting av medlem: {ex.Message}";
+        }
+        finally
+        {
+            _isProcessing = false;
+            StateHasChanged();
         }
     }
 
     private void Cancel() => MudDialog.Cancel();
-
-    private class RelationshipInput
-    {
-        public Guid ToMemberId { get; set; }
-        public RelationshipType Type { get; set; } = RelationshipType.ChildOf;
-    }
 }

@@ -1,8 +1,10 @@
-let network = null;
+﻿let network = null;
 let dotNetRef = null;
+let currentMemberId = null;
 
-export function initializeGraph(containerId, data, dotNetReference) {
+export function initializeGraph(containerId, data, dotNetReference, memberId) {
     dotNetRef = dotNetReference;
+    currentMemberId = memberId;
 
     const container = document.getElementById(containerId);
     if (!container) {
@@ -10,70 +12,117 @@ export function initializeGraph(containerId, data, dotNetReference) {
         return;
     }
 
-    // Configure Vis.js network options with Christmas theme
+    // Configure Vis.js network options for physics-based family graph with couple grouping
     const options = {
         nodes: {
-            shape: 'dot',
-            size: 30,
+            shape: 'box',
+             shapeProperties: {
+                interpolation: false    // 'true' for intensive zooming
+             },
+            size: 25,
+            margin: 10,
             font: {
-                size: 16,
-                face: 'Roboto',
-                color: '#ffffff'
+                size: 14,
+                face: 'Arial',
+                color: '#ffffff',
+                bold: {
+                    color: '#ffffff'
+                }
             },
-            borderWidth: 2,
-            shadow: true
+            borderWidth: 3,
+            shadow: {
+                enabled: true,
+                color: 'rgba(0,0,0,0.3)',
+                size: 10,
+                x: 3,
+                y: 3
+            },
+            widthConstraint: {
+                minimum: 100,
+                maximum: 150
+            },
+            chosen: {
+                node: function(values, id, selected, hovering) {
+                    // Preserve original colors - no color changes
+                    if (hovering) {
+                        // Subtle highlight on hover
+                        values.borderWidth = 4;
+                        values.shadowSize = 15;
+                        values.shadowColor = 'rgba(0,0,0,0.5)';
+                    }
+                    if (selected) {
+                        // Very subtle selection - just border, no color
+                        values.borderWidth = 5;
+                        // Keep the original border color
+                        values.highlightBorderColor = values.borderColor;
+                        values.hoverBorderColor = values.borderColor;
+                    }
+                }
+            },
+            // Disable color changes on select
+            color: {
+                highlight: {
+                    border: undefined,
+                    background: undefined
+                },
+                hover: {
+                    border: undefined,
+                    background: undefined
+                }
+            }
         },
         edges: {
             width: 2,
             shadow: true,
             smooth: {
-                type: 'continuous'
+                enabled: true,
+                type: 'continuous',
+                roundness: 0.5
             },
             font: {
-                size: 12,
-                align: 'middle'
+                size: 11,
+                align: 'middle',
+                color: '#666666',
+                strokeWidth: 0
             }
         },
-        groups: {
-            parent: {
-                color: {
-                    background: '#ef5350',  // Christmas red
-                    border: '#c62828',
-                    highlight: {
-                        background: '#ff6659',
-                        border: '#c62828'
-                    }
-                }
-            },
-            child: {
-                color: {
-                    background: '#66bb6a',  // Christmas green
-                    border: '#388e3c',
-                    highlight: {
-                        background: '#81c784',
-                        border: '#388e3c'
-                    }
-                }
-            }
+        layout: {
+            improvedLayout: true,
+            randomSeed: 42  // Consistent layout on reload
         },
         physics: {
             enabled: true,
             stabilization: {
                 enabled: true,
-                iterations: 200
+                iterations: 50,
+                updateInterval: 50,
+                fit: true
             },
             barnesHut: {
-                gravitationalConstant: -8000,
-                centralGravity: 0.3,
-                springLength: 150,
-                springConstant: 0.04
-            }
+                gravitationalConstant: -2000,
+                centralGravity: 0.5,
+                springLength: 50,
+                springConstant: 0.02,
+                damping: 0.15,
+                avoidOverlap: 0.5
+            },
+            solver: 'barnesHut',
+            timestep: 0.5,
+            adaptiveTimestep: true
         },
         interaction: {
             hover: true,
-            tooltipDelay: 200,
+            tooltipDelay: 100,
             zoomView: true,
-            dragView: true
+            dragView: true,
+            navigationButtons: false,
+            keyboard: {
+                enabled: true,
+                bindToWindow: false
+            },
+            dragNodes: true,
+            zoomSpeed: 1,
+            selectConnectedEdges: false
         }
     };
 
@@ -100,14 +149,42 @@ export function initializeGraph(containerId, data, dotNetReference) {
         }
     });
 
-    // Fit the graph to the container after stabilization
+    // Fit the graph and stop physics after stabilization
     network.once('stabilizationIterationsDone', function () {
-        network.fit({
-            animation: {
-                duration: 1000,
-                easingFunction: 'easeInOutQuad'
+        network.setOptions({ physics: { enabled: true } });
+
+        // Fit to container or focus on current member
+        setTimeout(() => {
+            if (currentMemberId && network.body.nodes[currentMemberId]) {
+                // Focus on the current logged-in member's node
+                network.focus(currentMemberId, {
+                    scale: 1.5,
+                    animation: {
+                        duration: 1000,
+                        easingFunction: 'easeInOutCubic'
+                    }
+                });
+                console.log(`Family graph focused on member: ${currentMemberId}`);
+            } else {
+                // Fallback to fitting entire graph if no member ID or node not found
+                network.fit({
+                    animation: {
+                        duration: 800,
+                        easingFunction: 'easeInOutCubic'
+                    },
+                    padding: 50
+                });
+                console.log('Family graph stabilized - showing all nodes');
             }
-        });
+        }, 100);
+
+        console.log('Family graph stabilized and physics disabled');
+    });
+
+    // Optional: add visual feedback during stabilization
+    network.on('stabilizationProgress', function(params) {
+        const percentage = Math.round((params.iterations / params.total) * 100);
+        console.log(`Building family graph: ${percentage}%`);
     });
 }
 
@@ -126,6 +203,27 @@ export function fitGraph() {
             }
         });
     }
+}
+
+export function focusOnMember(memberId) {
+    if (network && memberId) {
+        currentMemberId = memberId;
+        if (network.body.nodes[memberId]) {
+            network.focus(memberId, {
+                scale: 1.5,
+                animation: {
+                    duration: 1000,
+                    easingFunction: 'easeInOutCubic'
+                }
+            });
+            console.log(`Family graph focused on member: ${memberId}`);
+            return true;
+        } else {
+            console.warn(`Member node ${memberId} not found in graph`);
+            return false;
+        }
+    }
+    return false;
 }
 
 export function dispose() {

@@ -13,6 +13,8 @@ public class MemberAggregate
     public string? Email { get; private set; }
     public DateTime? DateOfBirth { get; private set; }
     public string? Notes { get; private set; }
+    public string? PinCode { get; private set; }
+    public bool IsAdmin { get; private set; }
     public DateTime CreatedAt { get; private set; }
     public DateTime UpdatedAt { get; private set; }
     public bool IsDeleted { get; private set; }
@@ -30,6 +32,7 @@ public class MemberAggregate
         Email = evt.Email;
         DateOfBirth = evt.DateOfBirth;
         Notes = evt.Notes;
+        IsAdmin = evt.IsAdmin;
         CreatedAt = evt.Timestamp;
         UpdatedAt = evt.Timestamp;
         IsDeleted = false;
@@ -63,6 +66,8 @@ public class MemberAggregate
     {
         var gift = new GiftAggregate();
         gift.Apply(evt);
+        // Set order to be at the end of the list
+        gift.Order = Gifts.Count;
         Gifts[evt.GiftId] = gift;
         UpdatedAt = evt.Timestamp;
     }
@@ -125,6 +130,21 @@ public class MemberAggregate
     }
 
     /// <summary>
+    /// Apply GiftsReordered event
+    /// </summary>
+    public void Apply(GiftsReordered evt)
+    {
+        foreach (var (giftId, order) in evt.GiftOrders)
+        {
+            if (Gifts.TryGetValue(giftId, out var gift))
+            {
+                gift.Order = order;
+            }
+        }
+        UpdatedAt = evt.Timestamp;
+    }
+
+    /// <summary>
     /// Apply RelationshipAdded event
     /// </summary>
     public void Apply(RelationshipAdded evt)
@@ -157,6 +177,15 @@ public class MemberAggregate
     }
 
     /// <summary>
+    /// Apply MemberPinCodeSet event
+    /// </summary>
+    public void Apply(MemberPinCodeSet evt)
+    {
+        PinCode = evt.PinCode;
+        UpdatedAt = evt.Timestamp;
+    }
+
+    /// <summary>
     /// Convert aggregate to Member model
     /// </summary>
     public Member ToModel()
@@ -165,6 +194,9 @@ public class MemberAggregate
         {
             Id = Id,
             Name = Name,
+            DateOfBirth = DateOfBirth,
+            PinCode = PinCode,
+            IsAdmin = IsAdmin,
             CreatedAt = CreatedAt,
             UpdatedAt = UpdatedAt,
             Gifts = Gifts.Values.Select(g => g.ToModel(Id)).ToList(),
@@ -187,6 +219,7 @@ public class GiftAggregate
     public Guid? TakenByMemberId { get; private set; }
     public DateTime? TakenAt { get; private set; }
     public GiftPriority Priority { get; private set; }
+    public int Order { get; set; }
     public DateTime CreatedAt { get; private set; }
     public DateTime UpdatedAt { get; private set; }
 
@@ -245,6 +278,7 @@ public class GiftAggregate
             TakenByMemberId = TakenByMemberId,
             TakenAt = TakenAt,
             Priority = Priority,
+            Order = Order,
             CreatedAt = CreatedAt,
             UpdatedAt = UpdatedAt
         };

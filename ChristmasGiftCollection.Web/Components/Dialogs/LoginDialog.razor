@@ -1,0 +1,376 @@
+@using ChristmasGiftCollection.Core.Services
+@using ChristmasGiftCollection.Web.Services
+@using ChristmasGiftCollection.Core.Models
+@inject IMemberService MemberService
+@inject IAuthenticationService AuthService
+@inject ISnackbar Snackbar
+@rendermode InteractiveServer
+
+<MudDialog>
+    <DialogContent>
+        @if (_currentStep == Step.SelectMember)
+        {
+            <MudText Typo="Typo.h6" Class="mb-4">Velg et familiemedlem</MudText>
+
+            @if (!string.IsNullOrEmpty(_errorMessage))
+            {
+                <MudAlert Severity="Severity.Error" Class="mb-3">@_errorMessage</MudAlert>
+            }
+
+            @if (_isLoading)
+            {
+                <div class="d-flex justify-center align-center" style="min-height: 200px;">
+                    <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+                </div>
+            }
+            else
+            {
+                @if (_members.Any())
+                {
+                    <MudList T="string" Dense="false" Style="max-height: 400px; overflow-y: auto;">
+                        @foreach (var member in _members)
+                        {
+                            <MudListItem T="string" OnClick="@(() => SelectMember(member))"
+                                         Style="min-height: 56px; border-radius: 8px; margin-bottom: 8px; cursor: pointer;">
+                                <div class="d-flex align-center">
+                                    <MudAvatar Color="Color.Primary" Class="mr-3">
+                                        @member.Name[0]
+                                    </MudAvatar>
+                                    <div>
+                                        <MudText Typo="Typo.body1">@member.Name</MudText>
+                                        @if (member.DateOfBirth.HasValue)
+                                        {
+                                            <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                                Født: @member.DateOfBirth.Value.ToString("dd. MMM yyyy")
+                                            </MudText>
+                                        }
+                                    </div>
+                                </div>
+                            </MudListItem>
+                        }
+                    </MudList>
+                    <MudDivider Class="my-4" />
+                }
+                else
+                {
+                    <MudText Color="Color.Secondary" Class="mb-4 text-center">
+                        Ingen familiemedlemmer ennå. Vær den første!
+                    </MudText>
+                }
+
+                <MudButton Variant="Variant.Text"
+                           Color="Color.Primary"
+                           FullWidth="true"
+                           StartIcon="@Icons.Material.Filled.PersonAdd"
+                           OnClick="GoToAddMember">
+                    Ikke her? Legg meg til
+                </MudButton>
+            }
+        }
+        else if (_currentStep == Step.EnterPin)
+        {
+            <MudText Typo="Typo.h6" Class="mb-2">Velkommen, @_selectedMember?.Name</MudText>
+            @if (string.IsNullOrEmpty(_selectedMember?.PinCode))
+            {
+                <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">
+                    Opprett en 4-sifret PIN-kode
+                </MudText>
+            }
+            else
+            {
+                <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">
+                    Skriv inn din 4-sifrede PIN
+                </MudText>
+            }
+
+            @if (!string.IsNullOrEmpty(_errorMessage))
+            {
+                <MudAlert Severity="Severity.Error" Class="mb-3">@_errorMessage</MudAlert>
+            }
+
+            <MudTextField @bind-Value="_pin"
+                          @oninput="OnPinInput"
+                          Label="@(string.IsNullOrEmpty(_selectedMember?.PinCode) ? "Opprett PIN" : "PIN-kode")"
+                          Variant="Variant.Outlined"
+                          InputType="InputType.Password"
+                          Pattern="[0-9]*"
+                          InputMode="InputMode.numeric"
+                          MaxLength="4"
+                          Counter="4"
+                          Immediate="true"
+                          Margin="Margin.Dense"
+                          Class="mb-3"
+                          Style="font-size: 24px; text-align: center;"
+                          AutoFocus="true"
+                          OnKeyUp="HandlePinKeyPress"
+                          HelperText="@(string.IsNullOrEmpty(_selectedMember?.PinCode) ? "Opprett en sikker 4-sifret PIN" : "Skriv inn din 4-sifrede PIN")"
+                          Error="@(_pin.Length > 0 && _pin.Length < 4)"
+                          ErrorText="PIN må være nøyaktig 4 sifre" />
+
+            <div class="d-flex gap-2">
+                <MudButton Variant="Variant.Outlined"
+                           Color="Color.Default"
+                           FullWidth="true"
+                           Size="Size.Large"
+                           OnClick="BackToMemberSelection">
+                    Tilbake
+                </MudButton>
+                <MudButton Variant="Variant.Filled"
+                           Color="Color.Success"
+                           FullWidth="true"
+                           Size="Size.Large"
+                           OnClick="ProcessPin"
+                           Disabled="@(_pin.Length != 4 || _isProcessing)">
+                    @if (_isProcessing)
+                    {
+                        <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                    }
+                    @(string.IsNullOrEmpty(_selectedMember?.PinCode) ? "Angi PIN" : "Logg inn")
+                </MudButton>
+            </div>
+        }
+        else if (_currentStep == Step.AddMember)
+        {
+            <MudText Typo="Typo.h6" Class="mb-2">Legg til deg selv</MudText>
+            <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
+                Opprett profilen din for å bli med i familien
+            </MudText>
+
+            @if (!string.IsNullOrEmpty(_errorMessage))
+            {
+                <MudAlert Severity="Severity.Error" Class="mb-3">@_errorMessage</MudAlert>
+            }
+
+            <MudTextField @bind-Value="_newName"
+                          Label="Ditt navn"
+                          Variant="Variant.Outlined"
+                          Margin="Margin.Dense"
+                          Class="mb-3"
+                          AutoFocus="true"
+                          Required="true"
+                          HelperText="Skriv inn ditt fulle navn" />
+
+            <MudDatePicker @bind-Date="_newDateOfBirth"
+                           Label="Fødselsdato (Valgfritt)"
+                           Variant="Variant.Outlined"
+                           Margin="Margin.Dense"
+                           Class="mb-3"
+                           MaxDate="DateTime.Today" />
+
+            <MudTextField @bind-Value="_newPin"
+                          @oninput="OnNewPinInput"
+                          Label="Opprett 4-sifret PIN"
+                          Variant="Variant.Outlined"
+                          InputType="InputType.Password"
+                          Pattern="[0-9]*"
+                          InputMode="InputMode.numeric"
+                          MaxLength="4"
+                          Counter="4"
+                          Immediate="true"
+                          Margin="Margin.Dense"
+                          Class="mb-3"
+                          Style="font-size: 20px;"
+                          HelperText="Du vil bruke denne til å logge inn"
+                          Error="@(_newPin.Length > 0 && _newPin.Length < 4)"
+                          ErrorText="PIN må være nøyaktig 4 sifre" />
+
+            <div class="d-flex gap-2">
+                <MudButton Variant="Variant.Outlined"
+                           Color="Color.Default"
+                           FullWidth="true"
+                           Size="Size.Large"
+                           OnClick="BackToMemberSelection">
+                    Tilbake
+                </MudButton>
+                <MudButton Variant="Variant.Filled"
+                           Color="Color.Success"
+                           FullWidth="true"
+                           Size="Size.Large"
+                           OnClick="CreateMember"
+                           Disabled="@(string.IsNullOrWhiteSpace(_newName) || _newPin.Length != 4 || _isProcessing)">
+                    @if (_isProcessing)
+                    {
+                        <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                    }
+                    Legg meg til
+                </MudButton>
+            </div>
+        }
+    </DialogContent>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+
+    private enum Step { SelectMember, EnterPin, AddMember }
+
+    private Step _currentStep = Step.SelectMember;
+    private List<Member> _members = new();
+    private Member? _selectedMember;
+    private string _pin = "";
+    private string _newName = "";
+    private DateTime? _newDateOfBirth;
+    private string _newPin = "";
+    private string _errorMessage = "";
+    private bool _isLoading = true;
+    private bool _isProcessing = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _members = (await MemberService.GetAllMembersAsync())
+                .OrderBy(m => m.Name)
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Error loading members: {ex.Message}";
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private void SelectMember(Member member)
+    {
+        _selectedMember = member;
+        _pin = "";
+        _errorMessage = "";
+        _currentStep = Step.EnterPin;
+    }
+
+    private void GoToAddMember()
+    {
+        _newName = "";
+        _newDateOfBirth = null;
+        _newPin = "";
+        _errorMessage = "";
+        _currentStep = Step.AddMember;
+    }
+
+    private void BackToMemberSelection()
+    {
+        _selectedMember = null;
+        _pin = "";
+        _newName = "";
+        _newDateOfBirth = null;
+        _newPin = "";
+        _errorMessage = "";
+        _currentStep = Step.SelectMember;
+    }
+
+    private async Task OnPinInput(ChangeEventArgs e)
+    {
+        var value = e.Value?.ToString() ?? "";
+        // Limit to max 4 numeric characters
+        var filtered = new string(value.Where(char.IsDigit).Take(4).ToArray());
+        _pin = filtered;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task OnNewPinInput(ChangeEventArgs e)
+    {
+        var value = e.Value?.ToString() ?? "";
+        // Limit to max 4 numeric characters
+        var filtered = new string(value.Where(char.IsDigit).Take(4).ToArray());
+        _newPin = filtered;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task HandlePinKeyPress(KeyboardEventArgs e)
+    {
+        // Submit on Enter key
+        if (e.Key == "Enter" && _pin.Length == 4 && !_isProcessing)
+        {
+            await ProcessPin();
+        }
+    }
+
+    private async Task ProcessPin()
+    {
+        if (_selectedMember == null || _pin.Length != 4 || _isProcessing) return;
+
+        _isProcessing = true;
+        _errorMessage = "";
+
+        try
+        {
+            if (string.IsNullOrEmpty(_selectedMember?.PinCode))
+            {
+                // Setting new PIN for first time
+                var success = await AuthService.SetPinAsync(_selectedMember.Id, _pin, MemberService);
+                if (success)
+                {
+                    Snackbar.Add("PIN set successfully! You are now logged in.", Severity.Success);
+                    MudDialog.Close(DialogResult.Ok(true));
+                }
+                else
+                {
+                    _errorMessage = "Failed to set PIN. Please try again.";
+                    _pin = "";
+                }
+            }
+            else
+            {
+                // Logging in with existing PIN
+                var success = await AuthService.LoginAsync(_selectedMember.Id, _pin, MemberService);
+                if (success)
+                {
+                    Snackbar.Add($"Welcome back, {_selectedMember.Name}!", Severity.Success);
+                    MudDialog.Close(DialogResult.Ok(true));
+                }
+                else
+                {
+                    _errorMessage = "Incorrect PIN. Try again.";
+                    _pin = "";
+                }
+            }
+        }
+        finally
+        {
+            _isProcessing = false;
+        }
+    }
+
+    private async Task CreateMember()
+    {
+        if (string.IsNullOrWhiteSpace(_newName) || _newPin.Length != 4 || _isProcessing)
+            return;
+
+        _isProcessing = true;
+        _errorMessage = "";
+
+        try
+        {
+            // Create the new member
+            var member = await MemberService.CreateMemberAsync(
+                name: _newName.Trim(),
+                dateOfBirth: _newDateOfBirth
+            );
+
+            // Set their PIN and auto-login
+            var success = await AuthService.SetPinAsync(member.Id, _newPin, MemberService);
+
+            if (success)
+            {
+                Snackbar.Add($"Welcome to the family, {member.Name}!", Severity.Success);
+                MudDialog.Close(DialogResult.Ok(true));
+            }
+            else
+            {
+                _errorMessage = "Failed to set PIN. Please try again.";
+                _newPin = "";
+            }
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Error creating member: {ex.Message}";
+        }
+        finally
+        {
+            _isProcessing = false;
+        }
+    }
+}

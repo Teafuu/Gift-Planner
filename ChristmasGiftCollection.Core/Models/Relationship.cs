@@ -46,6 +46,13 @@ public class Relationship
 /// </summary>
 public enum RelationshipType
 {
-    ChildOf,
+    /// <summary>
+    /// From member is the parent of To member
+    /// </summary>
+    ParentOf,
+
+    /// <summary>
+    /// From member is the partner of To member (bidirectional - automatically created for both members)
+    /// </summary>
     PartnerOf
 }

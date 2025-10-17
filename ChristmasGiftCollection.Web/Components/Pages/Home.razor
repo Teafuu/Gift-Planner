@@ -2,12 +2,16 @@
 @using ChristmasGiftCollection.Core.Models
 @using ChristmasGiftCollection.Core.Services
 @using ChristmasGiftCollection.Web.Components.Dialogs
+@using ChristmasGiftCollection.Web.Components.Layout
+@using ChristmasGiftCollection.Web.Services
 @rendermode InteractiveServer
 @inject IMemberService MemberService
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
+@inject IAuthenticationService AuthService
+@inject NavigationManager Navigation
 
-<PageTitle>Family Gift Collection 2025</PageTitle>
+<PageTitle>Gaver</PageTitle>
 
 <style>
     .full-screen-graph {
@@ -18,13 +22,6 @@
     bottom: 0;
     z-index: 1;
     }
-
-    .fab-add-member {
-    position: fixed !important;
-    bottom: 24px;
-    right: 24px;
-    z-index: 1000;
-    }
 </style>
 
 <!-- Full-screen Family Graph -->
@@ -32,52 +29,79 @@
     <FamilyGraph @ref="_graphComponent" OnNodeClicked="HandleNodeClicked" />
 </div>
 
-<!-- Floating Action Button for Add Member -->
-<MudFab Color="Color.Primary"
-StartIcon="@Icons.Material.Filled.PersonAdd"
-Label="Add Member"
-Class="fab-add-member"
-OnClick="OpenAddMemberDialog" />
-
 @code {
     private FamilyGraph? _graphComponent;
 
-    private async Task OpenAddMemberDialog()
+    [CascadingParameter]
+    public MainLayout? Layout { get; set; }
+
+    protected override void OnInitialized()
     {
-        var parameters = new DialogParameters();
-        var options = new DialogOptions
-        {
-            CloseButton = true,
-            MaxWidth = MaxWidth.Small,
-            FullWidth = true
-        };
+        // Register callback with MainLayout for when login completes
+        Layout!.RegisterLoginCompletedCallback(HandleLoginCompleted);
+        Layout!.FamilyMemberChanged += HandleFamilyMemberChanged;
+    }
 
-        var dialog = await DialogService.ShowAsync<AddMemberDialog>("Add Family Member", parameters, options);
-        var result = await dialog.Result;
-
-        if (!result.Canceled)
+    private async Task HandleLoginCompleted()
+    {
+        // Wait a bit for the graph to be ready, then focus on current member
+        await Task.Delay(500);
+        if (_graphComponent != null && AuthService.IsAuthenticated())
         {
-            Snackbar.Add("Member added successfully!", Severity.Success);
-            await RefreshGraph();
+            await _graphComponent.FocusOnCurrentMemberAsync(AuthService.GetCurrentMemberId()!.Value);
         }
+    }
+
+    private async void HandleFamilyMemberChanged(Guid memberId)
+    {
+        await ShowMemberDetailsDialog(memberId);
     }
 
     private async Task HandleNodeClicked(Guid memberId)
     {
+        await ShowMemberDetailsDialog(memberId);
+    }
+
+    private Guid? _currentlyOpenDialogMemberId;
+
+    private async Task ShowMemberDetailsDialog(Guid memberId)
+    {
+        await _graphComponent.FocusOnCurrentMemberAsync(memberId);
+        _currentlyOpenDialogMemberId = memberId;
+
         var parameters = new DialogParameters<MemberDetailsDialog>
         {
-            { x => x.MemberId, memberId }
+            { x => x.MemberId, memberId },
+            { x => x.OnMemberChanged, EventCallback.Factory.Create<OnMemberChangedEvent>(this, HandleMemberChanged) }
         };
 
         var options = new DialogOptions
         {
             CloseButton = true,
             MaxWidth = MaxWidth.Medium,
-            FullWidth = true
+            FullWidth = true,
+            CloseOnEscapeKey = true
         };
 
-        var dialog = await DialogService.ShowAsync<MemberDetailsDialog>("Member Details", parameters, options);
-        await dialog.Result;
+        await DialogService.ShowAsync<MemberDetailsDialog>("Familiemedlem", parameters, options);
+        _currentlyOpenDialogMemberId = null;
+    }
+
+    private async Task HandleMemberChanged(OnMemberChangedEvent member)
+    {
+        if (member.shouldRefreshGraph)
+            await RefreshGraph();
+
+        // Only reopen dialog if it's a different member (e.g., navigating to a relationship)
+        // Don't reopen if we're just updating the same member's details
+        if (_currentlyOpenDialogMemberId.HasValue && member.memberId != _currentlyOpenDialogMemberId.Value)
+        {
+            await ShowMemberDetailsDialog(member.memberId);
+        }else
+        {
+            await _graphComponent.FocusOnCurrentMemberAsync(member.memberId);
+
+        }
     }
 
     private async Task RefreshGraph()
@@ -87,4 +111,6 @@ OnClick="OpenAddMemberDialog" />
             await _graphComponent.RefreshAsync();
         }
     }
+
+    public record OnMemberChangedEvent(Guid memberId, bool shouldRefreshGraph);
 }

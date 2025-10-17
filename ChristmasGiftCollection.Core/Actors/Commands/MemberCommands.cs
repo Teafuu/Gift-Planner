@@ -119,6 +119,22 @@ public record RemoveRelationship(
 )  : MemberCommand(MemberId);
 
 /// <summary>
+/// Command to set or change a member's PIN code
+/// </summary>
+public record SetPinCode(
+    Guid MemberId,
+    string PinCode
+)  : MemberCommand(MemberId);
+
+/// <summary>
+/// Command to reorder gifts
+/// </summary>
+public record ReorderGifts(
+    Guid MemberId,
+    Dictionary<Guid, int> GiftOrders
+)  : MemberCommand(MemberId);
+
+/// <summary>
 /// Query to get member state from events
 /// </summary>
 public record GetMemberState(Guid MemberId)  : MemberCommand(MemberId);

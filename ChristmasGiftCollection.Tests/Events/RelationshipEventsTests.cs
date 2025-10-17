@@ -34,7 +34,7 @@ public class RelationshipEventsTests
 
     [Theory]
     [InlineData(RelationshipType.PartnerOf)]
-    [InlineData(RelationshipType.ChildOf)]
+    [InlineData(RelationshipType.ParentOf)]
     public void RelationshipAdded_ShouldSupportAllRelationshipTypes(RelationshipType type)
     {
         // Arrange & Act

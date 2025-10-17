@@ -1,10 +1,30 @@
 @using ChristmasGiftCollection.Core.Models
 @using ChristmasGiftCollection.Core.Services
+@using ChristmasGiftCollection.Web.Services
 @using MudBlazor
 @inject IMemberService MemberService
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
+@inject IAuthenticationService AuthService
 @rendermode InteractiveServer
+
+<style>
+    .gift-item {
+    transition: all 0.3s ease-in-out;
+    animation: slideIn 0.3s ease-out;
+    }
+
+    @@keyframes slideIn {
+    from {
+    opacity: 0;
+    transform: translateY(-10px);
+    }
+    to {
+    opacity: 1;
+    transform: translateY(0);
+    }
+    }
+</style>
 
 <MudDialog>
     <DialogContent>
@@ -14,35 +34,148 @@
         }
         else
         {
-            <MudText Typo="Typo.h6" Class="mb-2">@_member.Name</MudText>
+            <div class="d-flex align-center mb-2 gap-2">
+                @if (_isEditingName)
+                {
+                    <MudTextField @bind-Value="_editedName"
+                    Label="Navn"
+                    Variant="Variant.Outlined"
+                    Margin="Margin.Dense"
+                    Class="flex-grow-1" />
+                    <MudIconButton Icon="@Icons.Material.Filled.Check"
+                    Size="Size.Small"
+                    Color="Color.Success"
+                    OnClick="SaveName"
+                    Title="Lagre" />
+                    <MudIconButton Icon="@Icons.Material.Filled.Close"
+                    Size="Size.Small"
+                    Color="Color.Default"
+                    OnClick="CancelEditName"
+                    Title="Avbryt" />
+                }
+                else
+                {
+                    <MudText Typo="Typo.h6" Class="flex-grow-1">@_member.Name</MudText>
+                    <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                    Size="Size.Small"
+                    Color="Color.Primary"
+                    OnClick="StartEditName"
+                    Title="Rediger navn" />
+                }
+            </div>
+
+            <div class="d-flex align-center mt-2 gap-2">
+                @if (_isEditingDateOfBirth)
+                {
+                    <MudDatePicker @bind-Date="_editedDateOfBirth"
+                    Label="Fødselsdato"
+                    Variant="Variant.Outlined"
+                    Margin="Margin.Dense"
+                    Class="flex-grow-1"
+                    Clearable="true" />
+                    <MudIconButton Icon="@Icons.Material.Filled.Check"
+                    Size="Size.Small"
+                    Color="Color.Success"
+                    OnClick="SaveDateOfBirth"
+                    Title="Lagre" />
+                    <MudIconButton Icon="@Icons.Material.Filled.Close"
+                    Size="Size.Small"
+                    Color="Color.Default"
+                    OnClick="CancelEditDateOfBirth"
+                    Title="Avbryt" />
+                }
+                else
+                {
+                    <MudText Typo="Typo.body2" Class="flex-grow-1">
+                        <strong>Fødselsdato:</strong> @(_member.DateOfBirth?.ToString("dd. MMM yyyy") ?? "Ikke angitt")
+                    </MudText>
+                    <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                    Size="Size.Small"
+                    Color="Color.Primary"
+                    OnClick="StartEditDateOfBirth"
+                    Title="Rediger fødselsdato" />
+                }
+            </div>
 
             <MudDivider Class="my-4" />
 
-            <MudText Typo="Typo.h6" Class="mb-3">
-                Gifts (@_member.Gifts.Count)
-                <MudIconButton Icon="@Icons.Material.Filled.Add"
-                               Size="Size.Small"
-                               Color="Color.Primary"
-                               OnClick="OpenAddGiftDialog" />
-            </MudText>
+            <div class="d-flex justify-space-between align-center mb-3">
+                <MudText Typo="Typo.h6">
+                    Gaver (@_member.Gifts.Count)
+                </MudText>
+                @if (_canEditGifts)
+                {
+                    <div class="d-flex gap-2">
+                        @if (_hasUnsavedGiftOrder)
+                        {
+                            <MudButton Variant="Variant.Filled"
+                            Color="Color.Primary"
+                            Size="Size.Small"
+                            StartIcon="@Icons.Material.Filled.Save"
+                            OnClick="SaveGiftOrder"
+                            Disabled="@_isSavingGiftOrder">
+                                @if (_isSavingGiftOrder)
+                                {
+                                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                                }
+                                Lagre rekkefølge
+                            </MudButton>
+                        }
+                        <MudButton Variant="Variant.Filled"
+                        Color="Color.Success"
+                        Size="Size.Small"
+                        StartIcon="@Icons.Material.Filled.Add"
+                        OnClick="OpenAddGiftDialog">
+                            Legg til gave
+                        </MudButton>
+                    </div>
+                }
+            </div>
 
             @if (!_member.Gifts.Any())
             {
-                <MudText Color="Color.Secondary">No gifts added yet.</MudText>
+                <MudText Color="Color.Secondary">Ingen gaver lagt til ennå.</MudText>
             }
             else
             {
-                @foreach (var gift in _member.Gifts.OrderBy(g => g.Status))
+                var isOwner = _member.Id == _currentMemberId;
+                var orderedGifts = _member.Gifts.OrderBy(g => g.Order).ToList();
+
+                @for (int i = 0; i < orderedGifts.Count; i++)
                 {
-                    <MudCard Class="mb-2" Elevation="2">
+                    var gift = orderedGifts[i];
+                    var index = i;
+                    var isTakenByCurrentUser = gift.TakenByMemberId == _currentMemberId;
+                    var showTakenStatus = gift.Status == GiftStatus.Taken && (!isOwner || isTakenByCurrentUser);
+                    var isFirst = i == 0;
+                    var isLast = i == orderedGifts.Count - 1;
+
+                    <MudCard Class="mb-2 gift-item" Elevation="2" Style="@(showTakenStatus && !isTakenByCurrentUser ? "opacity: 0.6;" : "")">
                         <MudCardContent>
-                            <div class="d-flex justify-space-between align-center">
+                            <div class="d-flex justify-space-between align-center gap-2">
+                                @if (_canEditGifts)
+                                {
+                                    <div class="d-flex flex-column">
+                                        <MudIconButton Icon="@Icons.Material.Filled.KeyboardArrowUp"
+                                        Size="Size.Small"
+                                        Color="Color.Default"
+                                        Disabled="@isFirst"
+                                        OnClick="@(() => MoveGiftUp(gift.Id))"
+                                        Style="padding: 2px;" />
+                                        <MudIconButton Icon="@Icons.Material.Filled.KeyboardArrowDown"
+                                        Size="Size.Small"
+                                        Color="Color.Default"
+                                        Disabled="@isLast"
+                                        OnClick="@(() => MoveGiftDown(gift.Id))"
+                                        Style="padding: 2px;" />
+                                    </div>
+                                }
                                 <div style="flex: 1;">
                                     <MudText Typo="Typo.body1">
                                         <strong>@gift.Name</strong>
-                                        @if (gift.Status == GiftStatus.Taken)
+                                        @if (showTakenStatus)
                                         {
-                                            <MudChip T="string" Size="Size.Small" Color="Color.Success" Class="ml-2">Taken</MudChip>
+                                            <MudChip T="string" Size="Size.Small" Color="Color.Success" Class="ml-2">Reservert</MudChip>
                                         }
                                     </MudText>
                                     @if (!string.IsNullOrEmpty(gift.Description))
@@ -50,33 +183,40 @@
                                         <MudText Typo="Typo.body2" Color="Color.Secondary">@gift.Description</MudText>
                                     }
                                     <MudText Typo="Typo.caption">
-                                        Priority: @gift.Priority
+                                        Prioritet: @gift.Priority
                                     </MudText>
-                                    @if (gift.TakenByMemberId.HasValue)
+                                    @if (showTakenStatus && gift.TakenAt.HasValue)
                                     {
                                         <MudText Typo="Typo.caption" Color="Color.Success">
-                                            Taken on @gift.TakenAt?.ToString("MMM dd, yyyy")
+                                            Reservert @gift.TakenAt.Value.ToString("dd. MMM yyyy")
                                         </MudText>
                                     }
                                 </div>
-                                <div>
-                                    @if (gift.Status == GiftStatus.Available)
+                                <div class="d-flex gap-2 align-center">
+                                    @if (!isOwner && gift.Status == GiftStatus.Available)
                                     {
                                         <MudButton Size="Size.Small"
-                                                   Variant="Variant.Filled"
-                                                   Color="Color.Success"
-                                                   OnClick="@(() => TakeGift(gift.Id))">
-                                            Take
+                                        Variant="Variant.Filled"
+                                        Color="Color.Success"
+                                        OnClick="@(() => TakeGift(gift.Id))">
+                                            Reserver
                                         </MudButton>
                                     }
-                                    else
+                                    else if (isTakenByCurrentUser && gift.Status == GiftStatus.Taken)
                                     {
                                         <MudButton Size="Size.Small"
-                                                   Variant="Variant.Outlined"
-                                                   Color="Color.Default"
-                                                   OnClick="@(() => ReleaseGift(gift.Id))">
-                                            Release
+                                        Variant="Variant.Outlined"
+                                        Color="Color.Default"
+                                        OnClick="@(() => ReleaseGift(gift.Id))">
+                                            Frigi
                                         </MudButton>
+                                    }
+                                    @if (_canEditGifts)
+                                    {
+                                        <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                        Size="Size.Small"
+                                        Color="Color.Error"
+                                        OnClick="@(() => DeleteGift(gift.Id, gift.Name))" />
                                     }
                                 </div>
                             </div>
@@ -85,38 +225,302 @@
                 }
             }
 
+            <MudDivider Class="my-4" />
+            <MudText Typo="Typo.h6" Class="mb-3">
+                Relasjoner (@_member.Relationships.Count)
+                @if (_isAdmin)
+                {
+                    <MudIconButton Icon="@Icons.Material.Filled.Add"
+                    Size="Size.Small"
+                    Color="Color.Primary"
+                    OnClick="StartAddRelationship"
+                    Title="Legg til relasjon" />
+                }
+            </MudText>
+
+            @if (_isAddingRelationship)
+            {
+                <MudCard Class="mb-3" Elevation="2">
+                    <MudCardContent>
+                        <MudText Typo="Typo.subtitle2" Class="mb-2">Legg til ny relasjon</MudText>
+                        <MudSelect @bind-Value="_newRelationshipToMemberId"
+                        Label="Til medlem"
+                        Variant="Variant.Outlined"
+                        Margin="Margin.Dense"
+                        Class="mb-2">
+                            @foreach (var member in _allMembers.Where(m => m.Id != _member.Id))
+                            {
+                                <MudSelectItem Value="@member.Id">@member.Name</MudSelectItem>
+                            }
+                        </MudSelect>
+                        <MudSelect @bind-Value="_newRelationshipType"
+                        Label="Relasjonstype"
+                        Variant="Variant.Outlined"
+                        Margin="Margin.Dense"
+                        Class="mb-2">
+                            <MudSelectItem Value="@RelationshipType.ParentOf">Forelder til</MudSelectItem>
+                            <MudSelectItem Value="@RelationshipType.PartnerOf">Partner med</MudSelectItem>
+                        </MudSelect>
+                        <div class="d-flex gap-2 mt-2">
+                            <MudButton Variant="Variant.Filled"
+                            Color="Color.Success"
+                            Size="Size.Small"
+                            OnClick="SaveNewRelationship">
+                                Lagre
+                            </MudButton>
+                            <MudButton Variant="Variant.Outlined"
+                            Color="Color.Default"
+                            Size="Size.Small"
+                            OnClick="CancelAddRelationship">
+                                Avbryt
+                            </MudButton>
+                        </div>
+                    </MudCardContent>
+                </MudCard>
+            }
+
             @if (_member.Relationships.Any())
             {
-                <MudDivider Class="my-4" />
-                <MudText Typo="Typo.h6" Class="mb-2">Relationships</MudText>
                 @foreach (var rel in _member.Relationships)
                 {
-                    <MudChip T="string" Size="Size.Small" Class="mr-1 mb-1">
-                        @rel.Type.ToString().Replace("Of", " of")
-                    </MudChip>
+                    var toMemberName = GetMemberName(rel.ToMemberId);
+                    <MudCard Class="mb-2" Elevation="1">
+                        <MudCardContent Class="py-2">
+                            <div class="d-flex justify-space-between align-center">
+                                <div style="flex: 1;">
+                                    <MudText Typo="Typo.body2">
+                                        <strong>@FormatRelationshipType(rel.Type)</strong>
+                                    </MudText>
+                                    <MudLink Typo="Typo.body2"
+                                    Color="Color.Primary"
+                                    Underline="Underline.Hover"
+                                    OnClick="@(() => NavigateToMember(rel.ToMemberId))">
+                                        @toMemberName
+                                    </MudLink>
+                                </div>
+                                @if (_isAdmin)
+                                {
+                                    <div>
+                                        <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                        Size="Size.Small"
+                                        Color="Color.Error"
+                                        OnClick="@(() => RemoveRelationship(rel.Id, rel.ToMemberId))"
+                                        Title="Fjern relasjon" />
+                                    </div>
+                                }
+                            </div>
+                        </MudCardContent>
+                    </MudCard>
                 }
             }
         }
     </DialogContent>
     <DialogActions>
-        <MudButton OnClick="Close">Close</MudButton>
+        <MudButton OnClick="Close">Lukk</MudButton>
     </DialogActions>
 </MudDialog>
 
 @code {
     [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
     [Parameter] public Guid MemberId { get; set; }
+    [Parameter] public EventCallback<Pages.Home.OnMemberChangedEvent> OnMemberChanged { get; set; }
 
     private Member? _member;
+    private Member? _currentMember;
+    private List<Member> _allMembers = new();
+    private Guid? _currentMemberId;
+    private bool _canEditGifts = false;
+    private bool _isAdmin = false;
+    private bool _isEditingName;
+    private string _editedName = string.Empty;
+    private bool _isEditingDateOfBirth;
+    private DateTime? _editedDateOfBirth;
+    private bool _isAddingRelationship;
+    private Guid _newRelationshipToMemberId;
+    private RelationshipType _newRelationshipType = RelationshipType.ParentOf;
+    private bool _hasUnsavedGiftOrder = false;
+    private bool _isSavingGiftOrder = false;
 
     protected override async Task OnInitializedAsync()
     {
+        _currentMemberId = AuthService.GetCurrentMemberId();
+        _currentMember = await AuthService.GetCurrentMemberAsync(MemberService);
+        _isAdmin = _currentMember?.IsAdmin ?? false;
+
         await LoadMember();
+        await LoadAllMembers();
+
+        // Check if current user can edit gifts for this member
+        if (_currentMemberId.HasValue)
+        {
+            _canEditGifts = await MemberService.CanEditGiftsAsync(_currentMemberId.Value, MemberId);
+        }
     }
 
     private async Task LoadMember()
     {
         _member = await MemberService.GetMemberByIdAsync(MemberId);
+        _hasUnsavedGiftOrder = false;
+    }
+
+    private async Task LoadAllMembers()
+    {
+        var members = await MemberService.GetAllMembersAsync();
+        _allMembers = members.ToList();
+    }
+
+    private string GetMemberName(Guid memberId)
+    {
+        var member = _allMembers.FirstOrDefault(m => m.Id == memberId);
+        return member?.Name ?? "Unknown";
+    }
+
+    private string FormatRelationshipType(RelationshipType type)
+    {
+        return type switch
+        {
+            RelationshipType.ParentOf => "Forelder til",
+            RelationshipType.PartnerOf => "Partner med",
+            _ => type.ToString()
+        };
+    }
+
+    private void StartEditName()
+    {
+        _editedName = _member?.Name ?? string.Empty;
+        _isEditingName = true;
+    }
+
+    private void CancelEditName()
+    {
+        _isEditingName = false;
+        _editedName = string.Empty;
+    }
+
+    private async Task SaveName()
+    {
+        if (_member == null || string.IsNullOrWhiteSpace(_editedName))
+        {
+            Snackbar.Add("Navn kan ikke være tomt", Severity.Error);
+            return;
+        }
+
+        try
+        {
+            await MemberService.UpdateMemberAsync(_member.Id, name: _editedName);
+            Snackbar.Add("Navn oppdatert!", Severity.Success);
+            _isEditingName = false;
+            await LoadMember();
+            await OnMemberChanged.InvokeAsync(new Pages.Home.OnMemberChangedEvent(_member.Id, false));
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Feil ved oppdatering av navn: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private void StartEditDateOfBirth()
+    {
+        _editedDateOfBirth = _member?.DateOfBirth;
+        _isEditingDateOfBirth = true;
+    }
+
+    private void CancelEditDateOfBirth()
+    {
+        _isEditingDateOfBirth = false;
+        _editedDateOfBirth = null;
+    }
+
+    private async Task SaveDateOfBirth()
+    {
+        if (_member == null)
+        {
+            Snackbar.Add("Medlem ikke funnet", Severity.Error);
+            return;
+        }
+
+        try
+        {
+            await MemberService.UpdateMemberAsync(_member.Id, dateOfBirth: _editedDateOfBirth);
+            Snackbar.Add("Fødselsdato oppdatert!", Severity.Success);
+            _isEditingDateOfBirth = false;
+            await LoadMember();
+            await OnMemberChanged.InvokeAsync(new Pages.Home.OnMemberChangedEvent(_member.Id, false));
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Feil ved oppdatering av fødselsdato: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task NavigateToMember(Guid memberId)
+    {
+        MemberId = memberId;
+        await LoadMember();
+        await OnMemberChanged.InvokeAsync(new Pages.Home.OnMemberChangedEvent(memberId, false));
+        StateHasChanged();
+    }
+
+    private async Task RemoveRelationship(Guid relationshipId, Guid toMemberId)
+    {
+        if (_member == null) return;
+
+        try
+        {
+            await MemberService.RemoveRelationshipAsync(_member.Id, relationshipId, toMemberId);
+            Snackbar.Add("Relasjon fjernet!", Severity.Success);
+            await LoadMember();
+            await OnMemberChanged.InvokeAsync(new Pages.Home.OnMemberChangedEvent(_member.Id, true));
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Feil ved fjerning av relasjon: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private void StartAddRelationship()
+    {
+        _isAddingRelationship = true;
+        _newRelationshipToMemberId = Guid.Empty;
+        _newRelationshipType = RelationshipType.ParentOf;
+    }
+
+    private void CancelAddRelationship()
+    {
+        _isAddingRelationship = false;
+        _newRelationshipToMemberId = Guid.Empty;
+    }
+
+    private async Task SaveNewRelationship()
+    {
+        if (_member == null)
+        {
+            Snackbar.Add("Medlem ikke funnet", Severity.Error);
+            return;
+        }
+
+        if (_newRelationshipToMemberId == Guid.Empty)
+        {
+            Snackbar.Add("Vennligst velg et medlem", Severity.Error);
+            return;
+        }
+
+        try
+        {
+            await MemberService.AddRelationshipAsync(_member.Id, _newRelationshipToMemberId, _newRelationshipType);
+            Snackbar.Add("Relasjon lagt til!", Severity.Success);
+            _isAddingRelationship = false;
+            await LoadMember();
+            await OnMemberChanged.InvokeAsync(new Pages.Home.OnMemberChangedEvent(_member.Id, true));
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Feil ved tillegging av relasjon: {ex.Message}", Severity.Error);
+        }
     }
 
     private async Task OpenAddGiftDialog()
@@ -129,7 +533,8 @@
         var options = new DialogOptions
         {
             CloseButton = true,
-            MaxWidth = MaxWidth.Small
+            MaxWidth = MaxWidth.Medium,
+            FullWidth = true
         };
 
         var dialog = await DialogService.ShowAsync<AddGiftDialog>("Add Gift", parameters, options);
@@ -144,31 +549,142 @@
 
     private async Task TakeGift(Guid giftId)
     {
+        if (_member == null || !_currentMemberId.HasValue)
+        {
+            Snackbar.Add("Ikke autentisert", Severity.Error);
+            return;
+        }
+
         try
         {
-            // TODO: Implement TakeGift in ActorMemberService
-            Snackbar.Add("Gift marked as taken!", Severity.Success);
+            await MemberService.TakeGiftAsync(_member.Id, giftId, _currentMemberId.Value);
+            Snackbar.Add("Gave reservert!", Severity.Success);
             await LoadMember();
             StateHasChanged();
         }
         catch (Exception ex)
         {
-            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+            Snackbar.Add($"Feil: {ex.Message}", Severity.Error);
         }
     }
 
     private async Task ReleaseGift(Guid giftId)
     {
+        if (_member == null || !_currentMemberId.HasValue)
+        {
+            Snackbar.Add("Ikke autentisert", Severity.Error);
+            return;
+        }
+
         try
         {
-            // TODO: Implement ReleaseGift in ActorMemberService
-            Snackbar.Add("Gift released!", Severity.Success);
+            await MemberService.ReleaseGiftAsync(_member.Id, giftId, _currentMemberId.Value);
+            Snackbar.Add("Gave frigitt!", Severity.Success);
             await LoadMember();
             StateHasChanged();
         }
         catch (Exception ex)
         {
-            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+            Snackbar.Add($"Feil: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private void MoveGiftUp(Guid giftId)
+    {
+        if (_member == null) return;
+
+        var orderedGifts = _member.Gifts.OrderBy(g => g.Order).ToList();
+        var currentIndex = orderedGifts.FindIndex(g => g.Id == giftId);
+
+        if (currentIndex <= 0) return;
+
+        // Swap with previous item
+        SwapGiftsLocal(orderedGifts, currentIndex, currentIndex - 1);
+    }
+
+    private void MoveGiftDown(Guid giftId)
+    {
+        if (_member == null) return;
+
+        var orderedGifts = _member.Gifts.OrderBy(g => g.Order).ToList();
+        var currentIndex = orderedGifts.FindIndex(g => g.Id == giftId);
+
+        if (currentIndex < 0 || currentIndex >= orderedGifts.Count - 1) return;
+
+        // Swap with next item
+        SwapGiftsLocal(orderedGifts, currentIndex, currentIndex + 1);
+    }
+
+    private void SwapGiftsLocal(List<Gift> orderedGifts, int index1, int index2)
+    {
+        // Swap orders in memory only
+        var temp = orderedGifts[index1].Order;
+        orderedGifts[index1].Order = orderedGifts[index2].Order;
+        orderedGifts[index2].Order = temp;
+
+        // Mark as having unsaved changes
+        _hasUnsavedGiftOrder = true;
+
+        // Update UI
+        StateHasChanged();
+    }
+
+    private async Task SaveGiftOrder()
+    {
+        if (_member == null || !_hasUnsavedGiftOrder) return;
+
+        _isSavingGiftOrder = true;
+        StateHasChanged();
+
+        try
+        {
+            // Create order mapping for all gifts
+            var giftOrders = _member.Gifts.ToDictionary(g => g.Id, g => g.Order);
+
+            // Send reorder command
+            await MemberService.ReorderGiftsAsync(_member.Id, giftOrders);
+
+            _hasUnsavedGiftOrder = false;
+            Snackbar.Add("Rekkefølge lagret!", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            // If it fails, reload to get correct state
+            Snackbar.Add($"Feil ved lagring av rekkefølge: {ex.Message}", Severity.Error);
+            await LoadMember();
+        }
+        finally
+        {
+            _isSavingGiftOrder = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task DeleteGift(Guid giftId, string giftName)
+    {
+        if (_member == null) return;
+
+        // Confirm deletion
+        bool? result = await DialogService.ShowMessageBox(
+            "Slett gave",
+            $"Er du sikker på at du vil slette '{giftName}'?",
+            yesText: "Slett",
+            cancelText: "Avbryt");
+
+        if (result != true) return;
+
+        try
+        {
+            await MemberService.RemoveGiftAsync(_member.Id, giftId);
+            Snackbar.Add($"Gave '{giftName}' slettet!", Severity.Success);
+
+            // Reload member data
+            await LoadMember();
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Feil ved sletting av gave: {ex.Message}", Severity.Error);
         }
     }
 
